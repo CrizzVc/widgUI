@@ -190,7 +190,7 @@ namespace WidgUI
             {
                 Width = 3,
                 Height = 120, // Revert to initial tiny height
-                Background = new SolidColorBrush(Color.FromArgb(180, 56, 189, 248)), // Glowing sky blue line
+                Background = new SolidColorBrush(Color.FromRgb(0x17, 0x17, 0x17)), // #171717
                 CornerRadius = new CornerRadius(1.5),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center, // Revert to center anchor
@@ -209,7 +209,7 @@ namespace WidgUI
                 Background = new SolidColorBrush(Color.FromRgb(10, 6, 5)), // #020305ff
                 BorderBrush = new SolidColorBrush(Color.FromArgb(120, 56, 189, 248)), // Celeste glow
                 BorderThickness = new Thickness(0, 1.5, 1.5, 1.5), // No border on left side
-                CornerRadius = new CornerRadius(6, 20, 20, 6), // Small curve at screen edge junction
+                CornerRadius = new CornerRadius(0, 20, 20, 0), // Flat on the left, rounded on the right
                 Margin = new Thickness(0, 0, 2, 0), // Room for right border stroke
                 Visibility = Visibility.Collapsed,
                 Opacity = 0,
