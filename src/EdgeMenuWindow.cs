@@ -158,6 +158,23 @@ namespace WidgUI
             DesktopManager.EmbedInDesktop(this);
         }
 
+        private void EnableKeyboard()
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_NOACTIVATE);
+            this.Activate();
+            this.Focus();
+        }
+
+        private void DisableKeyboard()
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
+            DesktopManager.EmbedInDesktop(this);
+        }
+
         private void BuildUI()
         {
             // Root Grid
@@ -953,23 +970,11 @@ namespace WidgUI
                 // Set permanently
                 SetWallpaper(filePath);
                 
-                // Highlight only this active one
-                foreach (object child in _thumbnailsStackPanel.Children)
-                {
-                    Border b = child as Border;
-                    if (b != null)
-                    {
-                        if (b.ToolTip != null && b.ToolTip.ToString() == Path.GetFileName(_activeWallpaperPath))
-                        {
-                            b.BorderBrush = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // Green for selected
-                        }
-                        else
-                        {
-                            b.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
-                        }
-                    }
-                }
-                border.BorderBrush = new SolidColorBrush(Color.FromRgb(34, 197, 94));
+                // Synchronize the selected index to allow arrow navigation from this point
+                _selectedThumbnailIndex = _thumbnailsStackPanel.Children.IndexOf(border);
+                
+                // Refresh highlights manually
+                SelectThumbnailByIndex(_selectedThumbnailIndex);
             };
 
             return border;
@@ -1116,11 +1121,30 @@ namespace WidgUI
                 }
             }
 
-            // Scroll selected into view
+            // Scroll selected into view securely and center it
             Border selected = _thumbnailsStackPanel.Children[_selectedThumbnailIndex] as Border;
             if (selected != null)
             {
-                selected.BringIntoView();
+                try
+                {
+                    selected.BringIntoView();
+                    
+                    // Try to center the item perfectly in the ScrollViewer
+                    selected.UpdateLayout();
+                    GeneralTransform transform = selected.TransformToAncestor(_thumbnailsScrollViewer);
+                    Point position = transform.Transform(new Point(0, 0));
+                    double targetOffset = position.Y + _thumbnailsScrollViewer.VerticalOffset 
+                                        - (_thumbnailsScrollViewer.ViewportHeight / 2) 
+                                        + (selected.ActualHeight / 2);
+                    
+                    if (targetOffset < 0) targetOffset = 0;
+                    _thumbnailsScrollViewer.ScrollToVerticalOffset(targetOffset);
+                }
+                catch
+                {
+                    // Fallback to basic BringIntoView if layout transform fails
+                    selected.BringIntoView();
+                }
             }
 
             // Preview the wallpaper
@@ -1132,12 +1156,12 @@ namespace WidgUI
             if (_activeSubPanel != "wallpaper" || _loadedImageFiles == null || _loadedImageFiles.Length == 0)
                 return;
 
-            if (e.Key == Key.Down)
+            if (e.Key == Key.Down || e.Key == Key.Right)
             {
                 SelectThumbnailByIndex(_selectedThumbnailIndex + 1);
                 e.Handled = true;
             }
-            else if (e.Key == Key.Up)
+            else if (e.Key == Key.Up || e.Key == Key.Left)
             {
                 SelectThumbnailByIndex(_selectedThumbnailIndex - 1);
                 e.Handled = true;
@@ -1199,11 +1223,20 @@ namespace WidgUI
                     _wallpaperPanel.Visibility = Visibility.Visible;
                     LoadWallpaperPanelContent();
                     AnimateMenuSize(320, 480);
+                    
+                    // Ensure the window and scroll viewer have focus to receive keyboard events
+                    this.Focus();
+                    if (_thumbnailsScrollViewer != null)
+                    {
+                        _thumbnailsScrollViewer.Focus();
+                    }
                 }
 
                 // 3. Make subpanel container visible but transparent
                 _subPanelContainer.Visibility = Visibility.Visible;
                 _subPanelContainer.Opacity = 0;
+                
+                EnableKeyboard();
 
                 // 4. Fade in the subpanel content
                 DoubleAnimation fadeInSub = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
@@ -1218,6 +1251,7 @@ namespace WidgUI
         private void GoBackToMainMenu()
         {
             _activeSubPanel = null;
+            DisableKeyboard();
 
             // 1. Fade out subpanel container
             DoubleAnimation fadeOutSub = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(150));
@@ -1316,6 +1350,8 @@ namespace WidgUI
 
             _isHovered = false;
             _hoverTimer.Stop();
+
+            DisableKeyboard();
 
             // Reset subpanels state
             _activeSubPanel = null;
