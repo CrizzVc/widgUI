@@ -83,6 +83,7 @@ namespace WidgUI
         private bool _isHovered = false;
         private double _screenCenterY; // Vertical center for symmetric expansion
         private DispatcherTimer _hoverTimer;
+        private DispatcherTimer _leaveTimer;
 
         // Wallpaper subpanel state
         private string _wallpaperFolderPath = null;
@@ -119,6 +120,10 @@ namespace WidgUI
             _hoverTimer = new DispatcherTimer();
             _hoverTimer.Interval = TimeSpan.FromMilliseconds(750);
             _hoverTimer.Tick += HoverTimer_Tick;
+
+            _leaveTimer = new DispatcherTimer();
+            _leaveTimer.Interval = TimeSpan.FromMilliseconds(200); // 200ms debounce
+            _leaveTimer.Tick += LeaveTimer_Tick;
         }
 
         private void InitializeWindow()
@@ -1190,9 +1195,6 @@ namespace WidgUI
                     _wallpaperPanel.Visibility = Visibility.Visible;
                     LoadWallpaperPanelContent();
                     AnimateWindowSize(320, 480);
-                    // Force keyboard focus for arrow key navigation
-                    this.Activate();
-                    this.Focus();
                 }
 
                 // 3. Make subpanel container visible but transparent
@@ -1272,6 +1274,9 @@ namespace WidgUI
         #region Mouse Hover Animation Flow
         private void EdgeMenuWindow_MouseEnter(object sender, MouseEventArgs e)
         {
+            _leaveTimer.Stop(); // Cancel any pending close
+            if (_isHovered) return;
+
             _isHovered = true;
             _hoverTimer.Stop();
 
@@ -1293,6 +1298,7 @@ namespace WidgUI
             _appNameText.BeginAnimation(TextBlock.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
 
             // Hide buttons first
+            _buttonsGrid.BeginAnimation(Grid.OpacityProperty, null); // Clear any pending fade in
             _buttonsGrid.Visibility = Visibility.Collapsed;
             _buttonsGrid.Opacity = 0;
 
@@ -1306,6 +1312,15 @@ namespace WidgUI
 
         private void EdgeMenuWindow_MouseLeave(object sender, MouseEventArgs e)
         {
+            // Debounce to prevent accidental closing during WPF window bounds animations
+            _leaveTimer.Start();
+        }
+
+        private void LeaveTimer_Tick(object sender, EventArgs e)
+        {
+            _leaveTimer.Stop();
+            if (this.IsMouseOver) return; // False alarm, mouse is still over the window
+
             _isHovered = false;
             _hoverTimer.Stop();
 
@@ -1337,15 +1352,14 @@ namespace WidgUI
 
             // Transition: Fade out app name, then fade in buttons
             DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(180));
-            fadeOut.Completed += (s, ev) =>
-            {
-                _appNameText.Visibility = Visibility.Collapsed;
-                _buttonsGrid.Visibility = Visibility.Visible;
-
-                DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180));
-                _buttonsGrid.BeginAnimation(Grid.OpacityProperty, fadeIn);
-            };
             _appNameText.BeginAnimation(TextBlock.OpacityProperty, fadeOut);
+
+            _buttonsGrid.Visibility = Visibility.Visible;
+            DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(180)
+            };
+            _buttonsGrid.BeginAnimation(Grid.OpacityProperty, fadeIn);
         }
         #endregion
     }
