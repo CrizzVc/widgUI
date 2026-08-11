@@ -1266,11 +1266,14 @@ namespace WidgUI
             grid.Children.Add(clockWidget);
 
             // Mock widgets
+            grid.Children.Add(CreateWidgetItem("Carpetas", "\uE838", false, null));
             grid.Children.Add(CreateWidgetItem("Clima", "\uE706", false, null));
             grid.Children.Add(CreateWidgetItem("Sistema", "\uE90F", false, null));
             grid.Children.Add(CreateWidgetItem("Música", "\uE8D6", false, null));
             grid.Children.Add(CreateWidgetItem("Notas", "\uE70B", false, null));
             grid.Children.Add(CreateWidgetItem("Fotos", "\uE8B9", false, null));
+            grid.Children.Add(CreateWidgetItem("Juegos", "\uE7FC", false, null));
+            grid.Children.Add(CreateWidgetItem("Calendario", "\uE787", false, null));
 
             scrollViewer.Content = grid;
             _widgetsPanel.Children.Add(scrollViewer);
