@@ -42,7 +42,6 @@ namespace WidgUI
 
         private MainWindow _mainWindow;
         
-        private Border _mainBorder;
         private Border _collapsedIndicator;
         private Grid _layoutGrid;
         
@@ -56,8 +55,9 @@ namespace WidgUI
         private Border _btnSettings;
         private Border _btnWallpaper;
 
-        // Divider
-        private Border _divider;
+        // Subpanel border
+        private Border _subPanelBorder;
+        private Border _divider; // Dummy to prevent reference errors
 
         // Subpanels container
         private Grid _subPanelContainer;
@@ -103,15 +103,18 @@ namespace WidgUI
             this.WindowStyle = WindowStyle.None;
             this.AllowsTransparency = true;
             this.Background = Brushes.Transparent;
-            this.Topmost = true;
+            this.Topmost = false; // Do not display on top of apps
             this.ShowInTaskbar = false;
             this.ResizeMode = ResizeMode.NoResize;
             this.ShowActivated = false;
 
-            this.Width = 12; // Collapsed starting width
-            this.Height = 120;
+            this.Width = 3; // Collapsed starting width is just a line!
+            this.Height = 300;
             this.Left = 0;
-            this.Top = 130; // High up on the left screen edge
+            
+            // Center vertically on primary screen
+            double screenHeight = SystemParameters.PrimaryScreenHeight;
+            this.Top = (screenHeight - this.Height) / 2 - 50;
         }
 
         private void EdgeMenuWindow_Loaded(object sender, RoutedEventArgs e)
@@ -120,79 +123,92 @@ namespace WidgUI
             int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             // Configure as toolwindow and no-activate
             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+            
+            // Embed in desktop so it is only shown on the wallpaper, behind other apps
+            DesktopManager.EmbedInDesktop(this);
         }
 
         private void BuildUI()
         {
-            // Main Glassmorphic Border
-            _mainBorder = new Border
+            // Root Grid
+            Grid rootGrid = new Grid
             {
-                Background = new SolidColorBrush(Color.FromArgb(235, 20, 20, 30)), // Deep elegant dark
-                BorderBrush = new SolidColorBrush(Color.FromArgb(160, 56, 189, 248)), // Sky-blue glow edge
-                BorderThickness = new Thickness(0, 1.5, 1.5, 0),
-                CornerRadius = new CornerRadius(0, 20, 20, 0),
-                Height = 76,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+
+            // 1. Collapsed Indicator (glowing thin 3px line)
+            _collapsedIndicator = new Border
+            {
+                Width = 3,
+                Height = 120,
+                Background = new SolidColorBrush(Color.FromArgb(180, 56, 189, 248)), // Glowing sky blue line
+                CornerRadius = new CornerRadius(1.5),
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Visibility = Visibility.Visible
+            };
+            rootGrid.Children.Add(_collapsedIndicator);
+
+            // 2. Expanded Grid (Col 0: Tab shape & buttons, Col 1: Sub-panels)
+            _layoutGrid = new Grid
+            {
+                Width = 262,
+                Height = 300,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed
+            };
+            _layoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });  // Tab (60px + 2px margin)
+            _layoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) }); // Subpanel
+
+            // 2.a. Curved Tab Path (Column 0)
+            System.Windows.Shapes.Path menuPath = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M 0,10 C 0,40 60,40 60,70 L 60,210 C 60,240 0,240 0,270 Z"),
+                Fill = new SolidColorBrush(Color.FromArgb(235, 20, 20, 30)), // Elegant dark glass background
+                Stroke = new SolidColorBrush(Color.FromArgb(160, 56, 189, 248)),
+                StrokeThickness = 1.5,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
                 Effect = new DropShadowEffect
                 {
                     Color = Colors.Black,
                     Direction = 315,
-                    ShadowDepth = 5,
-                    Opacity = 0.5,
-                    BlurRadius = 15
+                    ShadowDepth = 4,
+                    Opacity = 0.4,
+                    BlurRadius = 12
                 }
             };
+            Grid.SetColumn(menuPath, 0);
+            _layoutGrid.Children.Add(menuPath);
 
-            // Layout Grid - Fixed size inside stretching border to prevent shifting elements
-            _layoutGrid = new Grid
-            {
-                Width = 460,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            _layoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) }); // Col 0: Main menu
-            _layoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });  // Col 1: Divider spacer
-            _layoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(210) }); // Col 2: Sub panels
-
-            // 1. Collapsed Indicator (glowing thin bar)
-            _collapsedIndicator = new Border
-            {
-                Width = 3,
-                Height = 32,
-                Background = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
-                CornerRadius = new CornerRadius(1.5),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 4, 0),
-                Visibility = Visibility.Visible
-            };
-            Grid.SetColumn(_collapsedIndicator, 0);
-            _layoutGrid.Children.Add(_collapsedIndicator);
-
-            // 2. Expanded Container (holds either app name or buttons)
+            // 2.b. Expanded Container (holds rotated text or vertical button stack)
             _expandedContainer = new Grid
             {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Center,
-                Visibility = Visibility.Collapsed
+                Width = 60,
+                Height = 140,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(_expandedContainer, 0);
 
-            // 2.a. App Name Text
+            // 2.c. App Name (rotated -90 degrees vertically)
             _appNameText = new TextBlock
             {
                 Text = "widgUI",
                 FontFamily = new System.Windows.Media.FontFamily("Segoe UI, Arial"),
                 FontWeight = FontWeights.Bold,
-                FontSize = 18,
+                FontSize = 14,
                 Foreground = Brushes.White,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Opacity = 0
+                Opacity = 0,
+                LayoutTransform = new RotateTransform(-90)
             };
             _expandedContainer.Children.Add(_appNameText);
 
-            // 2.b. Action Buttons Grid
+            // 2.d. Vertical Buttons Grid
             _buttonsGrid = new Grid
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -200,50 +216,58 @@ namespace WidgUI
                 Opacity = 0,
                 Visibility = Visibility.Collapsed
             };
-            _buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            _buttonsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _buttonsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _buttonsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            // Create buttons
-            _btnAdd = CreateIconButton("\uE710", "Agregar", Color.FromRgb(52, 211, 153)); // Greenish-emerald
+            // Create circular buttons stacked vertically
+            _btnAdd = CreateIconButton("\uE710", "Diseño", Color.FromRgb(52, 211, 153)); // Green
             _btnAdd.MouseLeftButtonDown += (s, e) => ShowSubPanel("style");
-            Grid.SetColumn(_btnAdd, 0);
+            Grid.SetRow(_btnAdd, 0);
             _buttonsGrid.Children.Add(_btnAdd);
 
-            _btnSettings = CreateIconButton("\uE713", "Ajustes", Color.FromRgb(129, 140, 248)); // Slate blue
+            _btnSettings = CreateIconButton("\uE713", "Ajustes", Color.FromRgb(129, 140, 248)); // Blue
             _btnSettings.MouseLeftButtonDown += (s, e) => ShowSubPanel("settings");
-            Grid.SetColumn(_btnSettings, 1);
+            Grid.SetRow(_btnSettings, 1);
             _buttonsGrid.Children.Add(_btnSettings);
 
-            _btnWallpaper = CreateIconButton("\uE723", "Fondo", Color.FromRgb(244, 114, 182)); // Rose pink
+            _btnWallpaper = CreateIconButton("\uE723", "Fondo", Color.FromRgb(244, 114, 182)); // Pink
             _btnWallpaper.MouseLeftButtonDown += (s, e) => ShowSubPanel("wallpaper");
-            Grid.SetColumn(_btnWallpaper, 2);
+            Grid.SetRow(_btnWallpaper, 2);
             _buttonsGrid.Children.Add(_btnWallpaper);
 
             _expandedContainer.Children.Add(_buttonsGrid);
             _layoutGrid.Children.Add(_expandedContainer);
 
-            // 3. Divider (between columns 0 and 2)
-            _divider = new Border
+            // 3. Sub-panel Border
+            _subPanelBorder = new Border
             {
-                Width = 1.5,
-                Height = 44,
-                Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
-                HorizontalAlignment = HorizontalAlignment.Center,
+                Width = 200,
+                Height = 140,
+                Background = new SolidColorBrush(Color.FromArgb(235, 20, 20, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(160, 56, 189, 248)),
+                BorderThickness = new Thickness(0, 1.5, 1.5, 1.5),
+                CornerRadius = new CornerRadius(0, 16, 16, 0),
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
-                Visibility = Visibility.Collapsed
+                Visibility = Visibility.Collapsed,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    Direction = 315,
+                    ShadowDepth = 4,
+                    Opacity = 0.4,
+                    BlurRadius = 12
+                }
             };
-            Grid.SetColumn(_divider, 1);
-            _layoutGrid.Children.Add(_divider);
+            Grid.SetColumn(_subPanelBorder, 1);
 
-            // 4. Sub-panel Container
             _subPanelContainer = new Grid
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0)
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Margin = new Thickness(10, 8, 10, 8)
             };
-            Grid.SetColumn(_subPanelContainer, 2);
 
             BuildStylePanel();
             BuildSettingsPanel();
@@ -252,23 +276,27 @@ namespace WidgUI
             _subPanelContainer.Children.Add(_stylePanel);
             _subPanelContainer.Children.Add(_settingsPanel);
             _subPanelContainer.Children.Add(_wallpaperPanel);
-            _layoutGrid.Children.Add(_subPanelContainer);
+            _subPanelBorder.Child = _subPanelContainer;
+            _layoutGrid.Children.Add(_subPanelBorder);
 
-            _mainBorder.Child = _layoutGrid;
-            this.Content = _mainBorder;
+            // Dummy divider to prevent compiler errors
+            _divider = new Border { Visibility = Visibility.Collapsed };
+
+            rootGrid.Children.Add(_layoutGrid);
+            this.Content = rootGrid;
         }
 
         private Border CreateIconButton(string glyph, string tooltip, Color hoverColor)
         {
             Border border = new Border
             {
-                Width = 42,
-                Height = 42,
-                CornerRadius = new CornerRadius(21),
+                Width = 34,
+                Height = 34,
+                CornerRadius = new CornerRadius(17),
                 Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                Margin = new Thickness(14, 0, 14, 0),
+                Margin = new Thickness(0, 6, 0, 6), // Vertical spacing
                 Cursor = Cursors.Hand,
                 ToolTip = tooltip
             };
@@ -277,7 +305,7 @@ namespace WidgUI
             {
                 Text = glyph,
                 FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 18,
+                FontSize = 15,
                 Foreground = Brushes.White,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -728,9 +756,9 @@ namespace WidgUI
         {
             if (_activeSubPanel == panelName)
             {
-                // Collapse subpanel, back to main menu
-                AnimateWindowWidth(260);
-                _divider.Visibility = Visibility.Collapsed;
+                // Collapse subpanel, back to main menu (width 62)
+                AnimateWindowWidth(62);
+                _subPanelBorder.Visibility = Visibility.Collapsed;
                 HideAllSubPanels();
                 _activeSubPanel = null;
                 return;
@@ -760,8 +788,8 @@ namespace WidgUI
                 _wallpaperPanel.BeginAnimation(Grid.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
             }
 
-            _divider.Visibility = Visibility.Visible;
-            AnimateWindowWidth(460);
+            _subPanelBorder.Visibility = Visibility.Visible;
+            AnimateWindowWidth(262);
         }
 
         private void HideAllSubPanels()
@@ -789,11 +817,11 @@ namespace WidgUI
             _isHovered = true;
             _hoverTimer.Stop();
 
-            // Expands immediately to main width
-            AnimateWindowWidth(260);
+            // Expands immediately to main width (62)
+            AnimateWindowWidth(62);
 
             _collapsedIndicator.Visibility = Visibility.Collapsed;
-            _expandedContainer.Visibility = Visibility.Visible;
+            _layoutGrid.Visibility = Visibility.Visible;
             
             // Show App Name first
             _appNameText.Visibility = Visibility.Visible;
@@ -815,15 +843,15 @@ namespace WidgUI
 
             // Reset subpanels state
             _activeSubPanel = null;
-            _divider.Visibility = Visibility.Collapsed;
+            _subPanelBorder.Visibility = Visibility.Collapsed;
             HideAllSubPanels();
 
-            // Animate width back to collapsed 12px
-            AnimateWindowWidth(12);
+            // Animate width back to collapsed 3px
+            AnimateWindowWidth(3);
 
-            // Re-show collapsed indicator, hide text/buttons
+            // Re-show collapsed indicator, hide layout grid
             _collapsedIndicator.Visibility = Visibility.Visible;
-            _expandedContainer.Visibility = Visibility.Collapsed;
+            _layoutGrid.Visibility = Visibility.Collapsed;
         }
 
         private void HoverTimer_Tick(object sender, EventArgs e)
