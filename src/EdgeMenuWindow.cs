@@ -137,8 +137,8 @@ namespace WidgUI
             this.ResizeMode = ResizeMode.NoResize;
             this.ShowActivated = false;
 
-            this.Width = 320; // Max expanded width
-            this.Height = 480; // Max expanded height
+            this.Width = 360; // Max expanded width + shadow room
+            this.Height = 560; // Max expanded height + flairs room
             this.Left = 0;
             
             // Store center for symmetric expansion
@@ -388,8 +388,8 @@ namespace WidgUI
 
             border.MouseEnter += (s, e) =>
             {
-                border.Background = new SolidColorBrush(Color.FromArgb(80, hoverColor.R, hoverColor.G, hoverColor.B));
-                border.BorderBrush = new SolidColorBrush(hoverColor);
+                border.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                border.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
             };
 
             border.MouseLeave += (s, e) =>
