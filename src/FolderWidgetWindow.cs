@@ -314,8 +314,12 @@ namespace WidgUI
             _isAnimating = true;
             _isExpanded = expand;
             
-            TimeSpan duration = TimeSpan.FromMilliseconds(350);
-            var easing = new CubicEase { EasingMode = EasingMode.EaseInOut };
+            // Use longer, smoother duration
+            TimeSpan moveDuration = TimeSpan.FromMilliseconds(450);
+            // Smooth deceleration for the main motion
+            var moveEasing = new QuinticEase { EasingMode = EasingMode.EaseInOut };
+            // Slight overshoot for a lively feel on expand
+            var expandEasing = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 };
             
             if (expand)
             {
@@ -360,9 +364,12 @@ namespace WidgUI
                 double targetLeft = (screenW - targetWidth) / 2.0;
                 double targetTop = (screenH - targetHeight) / 2.0;
                 
-                // Update columns for expanded view
+                // Update columns for expanded view  
                 _iconsGrid.Columns = cols;
+                
+                // Render shortcuts but start them invisible for staggered entrance
                 RenderShortcuts();
+                PrepareIconsForStaggeredEntrance();
                 
                 // First show overlay, then bring folder to front
                 this.Topmost = true;
@@ -371,25 +378,32 @@ namespace WidgUI
                 this.Activate();
                 this.Focus();
                 
-                // Animate size FROM current to target
+                // Animate size with subtle overshoot
                 DoubleAnimation animW = new DoubleAnimation
                 {
-                    From = COLLAPSED_WIDTH, To = targetWidth, Duration = duration, EasingFunction = easing
+                    From = COLLAPSED_WIDTH, To = targetWidth,
+                    Duration = moveDuration, EasingFunction = expandEasing
                 };
                 DoubleAnimation animH = new DoubleAnimation
                 {
-                    From = COLLAPSED_HEIGHT, To = targetHeight, Duration = duration, EasingFunction = easing
+                    From = COLLAPSED_HEIGHT, To = targetHeight,
+                    Duration = moveDuration, EasingFunction = expandEasing
                 };
                 
-                // Animate position FROM original to center
+                // Animate position with smooth quintic ease
                 DoubleAnimation animLeft = new DoubleAnimation
                 {
-                    From = _originalLeft, To = targetLeft, Duration = duration, EasingFunction = easing
+                    From = _originalLeft, To = targetLeft,
+                    Duration = moveDuration, EasingFunction = moveEasing
                 };
                 DoubleAnimation animTop = new DoubleAnimation
                 {
-                    From = _originalTop, To = targetTop, Duration = duration, EasingFunction = easing
+                    From = _originalTop, To = targetTop,
+                    Duration = moveDuration, EasingFunction = moveEasing
                 };
+                
+                // Animate border radius from large (collapsed) to slightly smaller (expanded)
+                AnimateCornerRadius(_cardBorder, new CornerRadius(30), new CornerRadius(24), moveDuration, moveEasing);
                 
                 // Animate shadow to be more dramatic
                 DropShadowEffect shadow = _cardBorder.Effect as DropShadowEffect;
@@ -397,28 +411,29 @@ namespace WidgUI
                 {
                     DoubleAnimation shadowBlur = new DoubleAnimation
                     {
-                        To = 40, Duration = duration, EasingFunction = easing
+                        To = 50, Duration = moveDuration, EasingFunction = moveEasing
                     };
                     DoubleAnimation shadowOpacity = new DoubleAnimation
                     {
-                        To = 0.4, Duration = duration, EasingFunction = easing
+                        To = 0.35, Duration = moveDuration, EasingFunction = moveEasing
                     };
                     DoubleAnimation shadowDepth = new DoubleAnimation
                     {
-                        To = 12, Duration = duration, EasingFunction = easing
+                        To = 15, Duration = moveDuration, EasingFunction = moveEasing
                     };
                     shadow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, shadowBlur);
                     shadow.BeginAnimation(DropShadowEffect.OpacityProperty, shadowOpacity);
                     shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty, shadowDepth);
                 }
                 
-                // Show close button
+                // Show close button with delayed fade
                 _closeButton.Visibility = Visibility.Visible;
                 DoubleAnimation fadeIn = new DoubleAnimation
                 {
                     From = 0, To = 1,
-                    Duration = TimeSpan.FromMilliseconds(200),
-                    BeginTime = TimeSpan.FromMilliseconds(200)
+                    Duration = TimeSpan.FromMilliseconds(250),
+                    BeginTime = TimeSpan.FromMilliseconds(300),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
                 };
                 _closeButton.BeginAnimation(UIElement.OpacityProperty, fadeIn);
                 
@@ -431,30 +446,46 @@ namespace WidgUI
                 this.BeginAnimation(Window.HeightProperty, animH);
                 this.BeginAnimation(Window.LeftProperty, animLeft);
                 this.BeginAnimation(Window.TopProperty, animTop);
+                
+                // Stagger icons in after a small delay (let container start growing first)
+                AnimateIconsStaggeredEntrance(true, TimeSpan.FromMilliseconds(120));
             }
             else
             {
-                // Collapse back
-                _iconsGrid.Columns = 2;
-                RenderShortcuts();
+                // First, animate icons OUT quickly before collapsing
+                AnimateIconsStaggeredEntrance(false, TimeSpan.Zero);
+                
+                // Use slightly shorter duration for collapse (feels snappier)
+                TimeSpan collapseDuration = TimeSpan.FromMilliseconds(380);
+                var collapseEasing = new QuinticEase { EasingMode = EasingMode.EaseInOut };
+                
+                // Delay the window collapse slightly so icons start fading first
+                TimeSpan collapseDelay = TimeSpan.FromMilliseconds(60);
                 
                 // Animate back to original size and position
                 DoubleAnimation animW = new DoubleAnimation
                 {
-                    To = COLLAPSED_WIDTH, Duration = duration, EasingFunction = easing
+                    To = COLLAPSED_WIDTH, Duration = collapseDuration,
+                    EasingFunction = collapseEasing, BeginTime = collapseDelay
                 };
                 DoubleAnimation animH = new DoubleAnimation
                 {
-                    To = COLLAPSED_HEIGHT, Duration = duration, EasingFunction = easing
+                    To = COLLAPSED_HEIGHT, Duration = collapseDuration,
+                    EasingFunction = collapseEasing, BeginTime = collapseDelay
                 };
                 DoubleAnimation animLeft = new DoubleAnimation
                 {
-                    To = _originalLeft, Duration = duration, EasingFunction = easing
+                    To = _originalLeft, Duration = collapseDuration,
+                    EasingFunction = collapseEasing, BeginTime = collapseDelay
                 };
                 DoubleAnimation animTop = new DoubleAnimation
                 {
-                    To = _originalTop, Duration = duration, EasingFunction = easing
+                    To = _originalTop, Duration = collapseDuration,
+                    EasingFunction = collapseEasing, BeginTime = collapseDelay
                 };
+                
+                // Animate corner radius back
+                AnimateCornerRadius(_cardBorder, new CornerRadius(24), new CornerRadius(30), collapseDuration, collapseEasing);
                 
                 // Restore shadow
                 DropShadowEffect shadow = _cardBorder.Effect as DropShadowEffect;
@@ -462,25 +493,26 @@ namespace WidgUI
                 {
                     DoubleAnimation shadowBlur = new DoubleAnimation
                     {
-                        To = 15, Duration = duration, EasingFunction = easing
+                        To = 15, Duration = collapseDuration, EasingFunction = collapseEasing
                     };
                     DoubleAnimation shadowOpacity = new DoubleAnimation
                     {
-                        To = 0.2, Duration = duration, EasingFunction = easing
+                        To = 0.2, Duration = collapseDuration, EasingFunction = collapseEasing
                     };
                     DoubleAnimation shadowDepth = new DoubleAnimation
                     {
-                        To = 5, Duration = duration, EasingFunction = easing
+                        To = 5, Duration = collapseDuration, EasingFunction = collapseEasing
                     };
                     shadow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, shadowBlur);
                     shadow.BeginAnimation(DropShadowEffect.OpacityProperty, shadowOpacity);
                     shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty, shadowDepth);
                 }
                 
-                // Hide close button
+                // Hide close button quickly
                 DoubleAnimation fadeOut = new DoubleAnimation
                 {
-                    To = 0, Duration = TimeSpan.FromMilliseconds(150)
+                    To = 0, Duration = TimeSpan.FromMilliseconds(120),
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
                 };
                 fadeOut.Completed += (s, e) => _closeButton.Visibility = Visibility.Collapsed;
                 _closeButton.BeginAnimation(UIElement.OpacityProperty, fadeOut);
@@ -498,6 +530,11 @@ namespace WidgUI
                     this.Height = COLLAPSED_HEIGHT;
                     this.Left = _originalLeft;
                     this.Top = _originalTop;
+                    
+                    // Switch back to collapsed layout
+                    _iconsGrid.Columns = 2;
+                    _isExpanded = false;
+                    RenderShortcuts();
                     
                     _isAnimating = false;
                     this.Topmost = false;
@@ -517,6 +554,152 @@ namespace WidgUI
                 this.BeginAnimation(Window.LeftProperty, animLeft);
                 this.BeginAnimation(Window.TopProperty, animTop);
             }
+        }
+        
+        /// <summary>
+        /// Prepares all icons in _iconsGrid for a staggered entrance by setting them
+        /// to invisible (scale 0, opacity 0) with a ScaleTransform centered at 0.5,0.5.
+        /// </summary>
+        private void PrepareIconsForStaggeredEntrance()
+        {
+            foreach (UIElement child in _iconsGrid.Children)
+            {
+                child.Opacity = 0;
+                child.RenderTransformOrigin = new Point(0.5, 0.5);
+                child.RenderTransform = new ScaleTransform(0.5, 0.5);
+            }
+        }
+        
+        /// <summary>
+        /// Animates each icon in _iconsGrid with a staggered scale+fade effect.
+        /// If entering: scales from 0.5 → 1 and fades in.
+        /// If exiting: scales from 1 → 0.7 and fades out.
+        /// </summary>
+        private void AnimateIconsStaggeredEntrance(bool enter, TimeSpan initialDelay)
+        {
+            int count = _iconsGrid.Children.Count;
+            double staggerMs = Math.Min(50, 200.0 / Math.Max(count, 1)); // Cap stagger for many items
+            
+            for (int i = 0; i < count; i++)
+            {
+                UIElement child = _iconsGrid.Children[i];
+                TimeSpan itemDelay = initialDelay + TimeSpan.FromMilliseconds(i * staggerMs);
+                
+                if (enter)
+                {
+                    // Ensure transform is set
+                    child.RenderTransformOrigin = new Point(0.5, 0.5);
+                    if (!(child.RenderTransform is ScaleTransform))
+                        child.RenderTransform = new ScaleTransform(0.5, 0.5);
+                    
+                    ScaleTransform st = child.RenderTransform as ScaleTransform;
+                    
+                    // Scale: 0.5 → 1 with BackEase for a subtle pop
+                    var scaleEase = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.3 };
+                    TimeSpan scaleDuration = TimeSpan.FromMilliseconds(320);
+                    
+                    DoubleAnimation scaleX = new DoubleAnimation
+                    {
+                        From = 0.5, To = 1, Duration = scaleDuration,
+                        BeginTime = itemDelay, EasingFunction = scaleEase
+                    };
+                    DoubleAnimation scaleY = new DoubleAnimation
+                    {
+                        From = 0.5, To = 1, Duration = scaleDuration,
+                        BeginTime = itemDelay, EasingFunction = scaleEase
+                    };
+                    
+                    // Opacity: 0 → 1
+                    DoubleAnimation fadeIn = new DoubleAnimation
+                    {
+                        From = 0, To = 1,
+                        Duration = TimeSpan.FromMilliseconds(220),
+                        BeginTime = itemDelay,
+                        EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                    };
+                    
+                    st.BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
+                    st.BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
+                    child.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                }
+                else
+                {
+                    // Exit: scale down and fade out quickly
+                    child.RenderTransformOrigin = new Point(0.5, 0.5);
+                    if (!(child.RenderTransform is ScaleTransform))
+                        child.RenderTransform = new ScaleTransform(1, 1);
+                    
+                    ScaleTransform st = child.RenderTransform as ScaleTransform;
+                    TimeSpan exitDuration = TimeSpan.FromMilliseconds(180);
+                    var exitEasing = new QuadraticEase { EasingMode = EasingMode.EaseIn };
+                    
+                    // Reverse stagger: last items disappear first
+                    TimeSpan reverseDelay = initialDelay + TimeSpan.FromMilliseconds((count - 1 - i) * (staggerMs * 0.5));
+                    
+                    DoubleAnimation scaleX = new DoubleAnimation
+                    {
+                        To = 0.7, Duration = exitDuration,
+                        BeginTime = reverseDelay, EasingFunction = exitEasing
+                    };
+                    DoubleAnimation scaleY = new DoubleAnimation
+                    {
+                        To = 0.7, Duration = exitDuration,
+                        BeginTime = reverseDelay, EasingFunction = exitEasing
+                    };
+                    DoubleAnimation fadeOut = new DoubleAnimation
+                    {
+                        To = 0, Duration = exitDuration,
+                        BeginTime = reverseDelay, EasingFunction = exitEasing
+                    };
+                    
+                    st.BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
+                    st.BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
+                    child.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Smoothly animates CornerRadius on a Border using a DispatcherTimer-based interpolation,
+        /// since WPF doesn't natively support CornerRadius animations.
+        /// </summary>
+        private void AnimateCornerRadius(Border border, CornerRadius from, CornerRadius to, TimeSpan duration, IEasingFunction easing)
+        {
+            DateTime startTime = DateTime.Now;
+            double totalMs = duration.TotalMilliseconds;
+            
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(16) // ~60fps
+            };
+            
+            timer.Tick += (s, e) =>
+            {
+                double elapsed = (DateTime.Now - startTime).TotalMilliseconds;
+                double progress = Math.Min(elapsed / totalMs, 1.0);
+                
+                // Apply easing manually
+                double easedProgress = progress;
+                if (easing != null)
+                {
+                    easedProgress = easing.Ease(progress);
+                }
+                
+                double topLeft = from.TopLeft + (to.TopLeft - from.TopLeft) * easedProgress;
+                double topRight = from.TopRight + (to.TopRight - from.TopRight) * easedProgress;
+                double bottomRight = from.BottomRight + (to.BottomRight - from.BottomRight) * easedProgress;
+                double bottomLeft = from.BottomLeft + (to.BottomLeft - from.BottomLeft) * easedProgress;
+                
+                border.CornerRadius = new CornerRadius(topLeft, topRight, bottomRight, bottomLeft);
+                
+                if (progress >= 1.0)
+                {
+                    timer.Stop();
+                    border.CornerRadius = to;
+                }
+            };
+            
+            timer.Start();
         }
 
         private void RenderShortcuts()
