@@ -1266,7 +1266,12 @@ namespace WidgUI
             grid.Children.Add(clockWidget);
 
             // Mock widgets
-            grid.Children.Add(CreateWidgetItem("Carpetas", "\uE838", false, null));
+            grid.Children.Add(CreateWidgetItem("Carpetas", "\uE838", false, () => 
+            {
+                FolderWidgetWindow newFolder = new FolderWidgetWindow();
+                newFolder.Show();
+                return false; // Does not toggle border active state permanently
+            }));
             grid.Children.Add(CreateWidgetItem("Clima", "\uE706", false, null));
             grid.Children.Add(CreateWidgetItem("Sistema", "\uE90F", false, null));
             grid.Children.Add(CreateWidgetItem("Música", "\uE8D6", false, null));
