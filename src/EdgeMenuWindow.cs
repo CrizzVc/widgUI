@@ -81,6 +81,7 @@ namespace WidgUI
         // Active state
         private string _activeSubPanel = null; // "style", "settings", "wallpaper", or null
         private bool _isHovered = false;
+        private double _screenCenterY; // Vertical center for symmetric expansion
         private DispatcherTimer _hoverTimer;
 
         // Wallpaper subpanel state
@@ -94,6 +95,14 @@ namespace WidgUI
         private DispatcherTimer _wallpaperDebounceTimer;
         private string _pendingWallpaperPath;
 
+        // Arrow key navigation
+        private int _selectedThumbnailIndex = -1;
+        private string[] _loadedImageFiles = new string[0];
+
+        // Smooth wallpaper transition overlay
+        private Window _wallpaperOverlay;
+        private System.Windows.Controls.Image _overlayImage;
+
         public EdgeMenuWindow(MainWindow mainWindow)
         {
             _mainWindow = mainWindow;
@@ -104,6 +113,8 @@ namespace WidgUI
             this.Loaded += EdgeMenuWindow_Loaded;
             this.MouseEnter += EdgeMenuWindow_MouseEnter;
             this.MouseLeave += EdgeMenuWindow_MouseLeave;
+            this.PreviewKeyDown += EdgeMenuWindow_KeyDown;
+            this.Focusable = true;
 
             _hoverTimer = new DispatcherTimer();
             _hoverTimer.Interval = TimeSpan.FromMilliseconds(750);
@@ -122,12 +133,13 @@ namespace WidgUI
             this.ShowActivated = false;
 
             this.Width = 3; // Collapsed starting width is just a line!
-            this.Height = 300;
+            this.Height = 200;
             this.Left = 0;
             
-            // Center vertically on primary screen
+            // Store center for symmetric expansion
             double screenHeight = SystemParameters.PrimaryScreenHeight;
-            this.Top = (screenHeight - this.Height) / 2 - 50;
+            _screenCenterY = screenHeight / 2;
+            this.Top = _screenCenterY - (this.Height / 2);
         }
 
         private void EdgeMenuWindow_Loaded(object sender, RoutedEventArgs e)
@@ -147,34 +159,34 @@ namespace WidgUI
             Grid rootGrid = new Grid
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) // Transparent but hit-testable
             };
 
             // 1. Collapsed Indicator (glowing thin 3px line)
             _collapsedIndicator = new Border
             {
                 Width = 3,
-                Height = 120,
                 Background = new SolidColorBrush(Color.FromArgb(180, 56, 189, 248)), // Glowing sky blue line
                 CornerRadius = new CornerRadius(1.5),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Stretch, // Stretch to match window height
                 Visibility = Visibility.Visible
             };
             rootGrid.Children.Add(_collapsedIndicator);
 
-            // 2. Unified Menu Border (Stretches with Window width)
+            // 2. Unified Menu Border (Stretches with Window)
             _menuBorder = new Border
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Center,
-                Height = 200,
-                Background = new SolidColorBrush(Color.FromArgb(235, 15, 23, 42)), // Slate-900 transparent glass
-                BorderBrush = new SolidColorBrush(Color.FromArgb(160, 56, 189, 248)), // Celeste glow
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Background = new SolidColorBrush(Color.FromRgb(32, 32, 32)), // #202020
+                BorderBrush = new SolidColorBrush(Color.FromArgb(120, 56, 189, 248)), // Celeste glow
                 BorderThickness = new Thickness(0, 1.5, 1.5, 1.5), // No border on left side
-                CornerRadius = new CornerRadius(0, 20, 20, 0),
+                CornerRadius = new CornerRadius(6, 20, 20, 6), // Small curve at screen edge junction
                 Margin = new Thickness(0, 0, 2, 0), // Room for right border stroke
                 Visibility = Visibility.Collapsed,
+                Opacity = 0,
                 Effect = new DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -245,11 +257,10 @@ namespace WidgUI
             _mainMenuGrid.Children.Add(_buttonsGrid);
             _menuGrid.Children.Add(_mainMenuGrid);
 
-            // 2.b. Sub-panels Container (Width 198 fits perfectly with 10px margins inside 218px border)
+            // 2.b. Sub-panels Container (stretches to fill available space)
             _subPanelContainer = new Grid
             {
-                Width = 198,
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
                 Margin = new Thickness(10, 8, 10, 8),
                 Visibility = Visibility.Collapsed
@@ -722,25 +733,18 @@ namespace WidgUI
             Grid.SetRow(folderRow, 0);
             _thumbnailsContainer.Children.Add(folderRow);
 
-            // Horizontal scroll viewer for thumbnails
+            // Vertical scroll viewer for thumbnails
             _thumbnailsScrollViewer = new ScrollViewer
             {
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Height = 55,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
                 Margin = new Thickness(0, 2, 0, 2)
-            };
-            // Enable mouse wheel horizontal scrolling
-            _thumbnailsScrollViewer.PreviewMouseWheel += (s, e) =>
-            {
-                _thumbnailsScrollViewer.ScrollToHorizontalOffset(_thumbnailsScrollViewer.HorizontalOffset - e.Delta);
-                e.Handled = true;
             };
 
             _thumbnailsStackPanel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
             _thumbnailsScrollViewer.Content = _thumbnailsStackPanel;
 
@@ -840,6 +844,8 @@ namespace WidgUI
 
                 if (files.Length == 0)
                 {
+                    _loadedImageFiles = new string[0];
+                    _selectedThumbnailIndex = -1;
                     TextBlock noImagesText = new TextBlock
                     {
                         Text = "Sin imágenes en la carpeta.",
@@ -851,6 +857,9 @@ namespace WidgUI
                     _thumbnailsStackPanel.Children.Add(noImagesText);
                     return;
                 }
+
+                _loadedImageFiles = files;
+                _selectedThumbnailIndex = -1;
 
                 foreach (string file in files)
                 {
@@ -876,11 +885,10 @@ namespace WidgUI
         {
             Border border = new Border
             {
-                Width = 80,
-                Height = 45,
-                Margin = new Thickness(4, 2, 4, 2),
-                CornerRadius = new CornerRadius(5),
-                BorderThickness = new Thickness(1.5),
+                Height = 90,
+                Margin = new Thickness(2, 3, 2, 3),
+                CornerRadius = new CornerRadius(8),
+                BorderThickness = new Thickness(2),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
                 Background = new SolidColorBrush(Color.FromArgb(30, 0, 0, 0)),
                 Cursor = Cursors.Hand,
@@ -900,7 +908,7 @@ namespace WidgUI
                 BitmapImage bmp = new BitmapImage();
                 bmp.BeginInit();
                 bmp.UriSource = new Uri(filePath);
-                bmp.DecodePixelWidth = 80;
+                bmp.DecodePixelWidth = 280;
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.CreateOptions = BitmapCreateOptions.DelayCreation;
                 bmp.EndInit();
@@ -964,13 +972,13 @@ namespace WidgUI
             if (_wallpaperDebounceTimer == null)
             {
                 _wallpaperDebounceTimer = new DispatcherTimer();
-                _wallpaperDebounceTimer.Interval = TimeSpan.FromMilliseconds(150); // 150ms debounce
+                _wallpaperDebounceTimer.Interval = TimeSpan.FromMilliseconds(200); // 200ms debounce
                 _wallpaperDebounceTimer.Tick += (s, e) =>
                 {
                     _wallpaperDebounceTimer.Stop();
                     if (!string.IsNullOrEmpty(_pendingWallpaperPath))
                     {
-                        SetWallpaper(_pendingWallpaperPath);
+                        SetWallpaperSmooth(_pendingWallpaperPath);
                     }
                 };
             }
@@ -987,6 +995,155 @@ namespace WidgUI
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Error setting wallpaper: " + ex.Message);
+            }
+        }
+
+        private void EnsureOverlayWindow()
+        {
+            if (_wallpaperOverlay != null) return;
+
+            _wallpaperOverlay = new Window
+            {
+                WindowStyle = WindowStyle.None,
+                AllowsTransparency = true,
+                Background = Brushes.Transparent,
+                Topmost = false,
+                ShowInTaskbar = false,
+                ResizeMode = ResizeMode.NoResize,
+                ShowActivated = false,
+                Left = 0,
+                Top = 0,
+                Width = SystemParameters.PrimaryScreenWidth,
+                Height = SystemParameters.PrimaryScreenHeight,
+                Opacity = 0
+            };
+
+            _overlayImage = new System.Windows.Controls.Image
+            {
+                Stretch = Stretch.UniformToFill,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _wallpaperOverlay.Content = _overlayImage;
+
+            _wallpaperOverlay.Loaded += (s, e) =>
+            {
+                IntPtr hwnd = new WindowInteropHelper(_wallpaperOverlay).Handle;
+                int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+                DesktopManager.EmbedInDesktop(_wallpaperOverlay);
+            };
+
+            _wallpaperOverlay.Show();
+        }
+
+        private void SetWallpaperSmooth(string filePath)
+        {
+            try
+            {
+                EnsureOverlayWindow();
+
+                // Load the new wallpaper image for the overlay
+                BitmapImage bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(filePath);
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.EndInit();
+                _overlayImage.Source = bmp;
+
+                // Fade in the overlay
+                DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(350))
+                {
+                    DecelerationRatio = 0.7
+                };
+                fadeIn.Completed += (s, e) =>
+                {
+                    // Once fully visible, apply actual wallpaper behind
+                    SetWallpaper(filePath);
+
+                    // Then fade out overlay
+                    DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300))
+                    {
+                        BeginTime = TimeSpan.FromMilliseconds(100)
+                    };
+                    _wallpaperOverlay.BeginAnimation(Window.OpacityProperty, fadeOut);
+                };
+                _wallpaperOverlay.BeginAnimation(Window.OpacityProperty, fadeIn);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Smooth wallpaper error: " + ex.Message);
+                // Fallback to direct set
+                SetWallpaper(filePath);
+            }
+        }
+
+        private void SelectThumbnailByIndex(int index)
+        {
+            if (_loadedImageFiles == null || _loadedImageFiles.Length == 0) return;
+            if (index < 0) index = 0;
+            if (index >= _loadedImageFiles.Length) index = _loadedImageFiles.Length - 1;
+
+            _selectedThumbnailIndex = index;
+
+            // Reset all borders
+            for (int i = 0; i < _thumbnailsStackPanel.Children.Count; i++)
+            {
+                Border b = _thumbnailsStackPanel.Children[i] as Border;
+                if (b != null)
+                {
+                    if (i == _selectedThumbnailIndex)
+                    {
+                        b.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248)); // sky blue highlight
+                    }
+                    else if (_activeWallpaperPath != null && b.ToolTip != null && b.ToolTip.ToString() == Path.GetFileName(_activeWallpaperPath))
+                    {
+                        b.BorderBrush = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // green for active
+                    }
+                    else
+                    {
+                        b.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+                    }
+                }
+            }
+
+            // Scroll selected into view
+            Border selected = _thumbnailsStackPanel.Children[_selectedThumbnailIndex] as Border;
+            if (selected != null)
+            {
+                selected.BringIntoView();
+            }
+
+            // Preview the wallpaper
+            HoverWallpaper(_loadedImageFiles[_selectedThumbnailIndex]);
+        }
+
+        private void EdgeMenuWindow_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (_activeSubPanel != "wallpaper" || _loadedImageFiles == null || _loadedImageFiles.Length == 0)
+                return;
+
+            if (e.Key == Key.Down)
+            {
+                SelectThumbnailByIndex(_selectedThumbnailIndex + 1);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Up)
+            {
+                SelectThumbnailByIndex(_selectedThumbnailIndex - 1);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter)
+            {
+                // Confirm selection
+                if (_selectedThumbnailIndex >= 0 && _selectedThumbnailIndex < _loadedImageFiles.Length)
+                {
+                    string filePath = _loadedImageFiles[_selectedThumbnailIndex];
+                    _activeWallpaperPath = filePath;
+                    SetWallpaperSmooth(filePath);
+                    SelectThumbnailByIndex(_selectedThumbnailIndex); // Refresh highlights
+                }
+                e.Handled = true;
             }
         }
         #endregion
@@ -1018,28 +1175,31 @@ namespace WidgUI
                     _subPanelTitle.Text = "ESTILO DEL RELOJ";
                     _stylePanel.Visibility = Visibility.Visible;
                     UpdateStylePanelSelections();
+                    AnimateWindowSize(220, 200);
                 }
                 else if (panelName == "settings")
                 {
                     _subPanelTitle.Text = "AJUSTES WIDGET";
                     _settingsPanel.Visibility = Visibility.Visible;
                     UpdateSettingsPanelSelections();
+                    AnimateWindowSize(220, 200);
                 }
                 else if (panelName == "wallpaper")
                 {
                     _subPanelTitle.Text = "FONDO DE ESCRITORIO";
                     _wallpaperPanel.Visibility = Visibility.Visible;
                     LoadWallpaperPanelContent();
+                    AnimateWindowSize(320, 480);
+                    // Force keyboard focus for arrow key navigation
+                    this.Activate();
+                    this.Focus();
                 }
 
                 // 3. Make subpanel container visible but transparent
                 _subPanelContainer.Visibility = Visibility.Visible;
                 _subPanelContainer.Opacity = 0;
 
-                // 4. Animate window width to 220
-                AnimateWindowWidth(220);
-
-                // 5. Fade in the subpanel content
+                // 4. Fade in the subpanel content
                 DoubleAnimation fadeInSub = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
                 {
                     BeginTime = TimeSpan.FromMilliseconds(100) // slight delay for smooth width expansion
@@ -1063,8 +1223,8 @@ namespace WidgUI
                 _mainMenuGrid.Visibility = Visibility.Visible;
                 _mainMenuGrid.Opacity = 0;
 
-                // 3. Animate window width back to 62
-                AnimateWindowWidth(62);
+                // 3. Animate back to main menu size
+                AnimateWindowSize(62, 200);
 
                 // 4. Fade in main menu
                 DoubleAnimation fadeInMain = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
@@ -1076,15 +1236,36 @@ namespace WidgUI
             _subPanelContainer.BeginAnimation(Grid.OpacityProperty, fadeOutSub);
         }
 
-        private void AnimateWindowWidth(double targetWidth)
+        private void AnimateWindowSize(double targetWidth, double targetHeight)
         {
-            DoubleAnimation anim = new DoubleAnimation
+            TimeSpan dur = TimeSpan.FromMilliseconds(300);
+            double decel = 0.85;
+
+            DoubleAnimation widthAnim = new DoubleAnimation
             {
                 To = targetWidth,
-                Duration = TimeSpan.FromMilliseconds(300),
-                DecelerationRatio = 0.85
+                Duration = dur,
+                DecelerationRatio = decel
             };
-            this.BeginAnimation(Window.WidthProperty, anim);
+            this.BeginAnimation(Window.WidthProperty, widthAnim);
+
+            DoubleAnimation heightAnim = new DoubleAnimation
+            {
+                To = targetHeight,
+                Duration = dur,
+                DecelerationRatio = decel
+            };
+            this.BeginAnimation(Window.HeightProperty, heightAnim);
+
+            // Animate Top to keep centered vertically
+            double targetTop = _screenCenterY - (targetHeight / 2);
+            DoubleAnimation topAnim = new DoubleAnimation
+            {
+                To = targetTop,
+                Duration = dur,
+                DecelerationRatio = decel
+            };
+            this.BeginAnimation(Window.TopProperty, topAnim);
         }
         #endregion
 
@@ -1094,11 +1275,14 @@ namespace WidgUI
             _isHovered = true;
             _hoverTimer.Stop();
 
-            // Expands immediately to main width (62)
-            AnimateWindowWidth(62);
+            // Expands immediately to main size (62x200)
+            AnimateWindowSize(62, 200);
 
             _collapsedIndicator.Visibility = Visibility.Collapsed;
             _menuBorder.Visibility = Visibility.Visible;
+
+            // Fade in the menu border
+            _menuBorder.BeginAnimation(Border.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
             
             // Show App Name first
             _mainMenuGrid.Visibility = Visibility.Visible;
@@ -1130,12 +1314,20 @@ namespace WidgUI
             _subPanelContainer.Visibility = Visibility.Collapsed;
             _mainMenuGrid.Visibility = Visibility.Collapsed;
 
-            // Animate width back to collapsed 3px
-            AnimateWindowWidth(3);
+            // Fade out the menu border smoothly, then collapse
+            DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
+            fadeOut.Completed += (s, ev) =>
+            {
+                _menuBorder.Visibility = Visibility.Collapsed;
+                _collapsedIndicator.Visibility = Visibility.Visible;
+                // Fade in collapsed indicator
+                _collapsedIndicator.Opacity = 0;
+                _collapsedIndicator.BeginAnimation(Border.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300)));
+            };
+            _menuBorder.BeginAnimation(Border.OpacityProperty, fadeOut);
 
-            // Re-show collapsed indicator, hide border
-            _collapsedIndicator.Visibility = Visibility.Visible;
-            _menuBorder.Visibility = Visibility.Collapsed;
+            // Animate back to collapsed size
+            AnimateWindowSize(3, 200);
         }
 
         private void HoverTimer_Tick(object sender, EventArgs e)
