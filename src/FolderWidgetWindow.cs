@@ -216,16 +216,8 @@ namespace WidgUI
             {
                 string tooltip = System.IO.Path.GetFileNameWithoutExtension(filePath);
                 
-                // Extract icon
-                Icon icon = System.Drawing.Icon.ExtractAssociatedIcon(filePath);
-                ImageSource imageSource = null;
-                if (icon != null)
-                {
-                    imageSource = Imaging.CreateBitmapSourceFromHIcon(
-                        icon.Handle,
-                        Int32Rect.Empty,
-                        BitmapSizeOptions.FromEmptyOptions());
-                }
+                // Extract high quality icon
+                ImageSource imageSource = IconHelper.GetHighQualityIcon(filePath);
 
                 _shortcuts.Add(new ShortcutData { Path = filePath, Tooltip = tooltip, IconSource = imageSource });
             }
@@ -750,6 +742,7 @@ namespace WidgUI
                     Opacity = 0.4,
                     Clip = new RectangleGeometry(new Rect(0, 0, iconSize, iconSize), cornerRadius, cornerRadius)
                 };
+                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
                 grid.Children.Add(img);
             }
 
@@ -827,6 +820,7 @@ namespace WidgUI
                     VerticalAlignment = VerticalAlignment.Center,
                     Clip = new RectangleGeometry(new Rect(0, 0, iconSize, iconSize), cornerRadius, cornerRadius)
                 };
+                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
                 containerGrid.Children.Add(img);
             }
             else
