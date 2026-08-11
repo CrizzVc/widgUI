@@ -747,7 +747,8 @@ namespace WidgUI
                     Height = iconSize,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Opacity = 0.4
+                    Opacity = 0.4,
+                    Clip = new RectangleGeometry(new Rect(0, 0, iconSize, iconSize), cornerRadius, cornerRadius)
                 };
                 grid.Children.Add(img);
             }
@@ -771,6 +772,15 @@ namespace WidgUI
             grid.Children.Add(tb);
 
             appBorder.Child = grid;
+            
+            appBorder.MouseEnter += (s, e) =>
+            {
+                overlay.Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0));
+            };
+            appBorder.MouseLeave += (s, e) =>
+            {
+                overlay.Background = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0));
+            };
             
             appBorder.MouseLeftButtonDown += (s, e) =>
             {
@@ -803,6 +813,8 @@ namespace WidgUI
                 }
             };
 
+            Grid containerGrid = new Grid();
+
             if (imageSource != null)
             {
                 System.Windows.Controls.Image img = new System.Windows.Controls.Image
@@ -812,9 +824,10 @@ namespace WidgUI
                     Width = iconSize,
                     Height = iconSize,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Clip = new RectangleGeometry(new Rect(0, 0, iconSize, iconSize), cornerRadius, cornerRadius)
                 };
-                appBorder.Child = img;
+                containerGrid.Children.Add(img);
             }
             else
             {
@@ -827,16 +840,27 @@ namespace WidgUI
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
-                appBorder.Child = tb;
+                containerGrid.Children.Add(tb);
             }
+
+            // Darken overlay for hover
+            Border darkenOverlay = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+                CornerRadius = new CornerRadius(cornerRadius),
+                IsHitTestVisible = false
+            };
+            containerGrid.Children.Add(darkenOverlay);
+
+            appBorder.Child = containerGrid;
 
             appBorder.MouseEnter += (s, e) =>
             {
-                appBorder.Background = new SolidColorBrush(Color.FromRgb(240, 240, 240));
+                darkenOverlay.Background = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0));
             };
             appBorder.MouseLeave += (s, e) =>
             {
-                appBorder.Background = Brushes.White;
+                darkenOverlay.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
             };
             appBorder.MouseLeftButtonDown += (s, e) =>
             {
