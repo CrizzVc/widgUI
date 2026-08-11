@@ -66,6 +66,7 @@ namespace WidgUI
         private Grid _stylePanel;
         private Grid _settingsPanel;
         private Grid _wallpaperPanel;
+        private Grid _widgetsPanel;
 
         // Settings items
         private Border _toggle24h;
@@ -287,8 +288,8 @@ namespace WidgUI
             _buttonsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             // Create circular buttons stacked vertically
-            _btnAdd = CreateIconButton("\uE710", "Diseño", Color.FromRgb(52, 211, 153)); // Green
-            _btnAdd.MouseLeftButtonDown += (s, e) => ShowSubPanel("style");
+            _btnAdd = CreateIconButton("\uE710", "Widgets", Color.FromRgb(52, 211, 153)); // Green
+            _btnAdd.MouseLeftButtonDown += (s, e) => ShowSubPanel("widgets");
             Grid.SetRow(_btnAdd, 0);
             _buttonsGrid.Children.Add(_btnAdd);
 
@@ -349,10 +350,12 @@ namespace WidgUI
             BuildStylePanel();
             BuildSettingsPanel();
             BuildWallpaperPanel();
+            BuildWidgetsPanel();
 
             _subPanelContentGrid.Children.Add(_stylePanel);
             _subPanelContentGrid.Children.Add(_settingsPanel);
             _subPanelContentGrid.Children.Add(_wallpaperPanel);
+            _subPanelContentGrid.Children.Add(_widgetsPanel);
 
             _menuGrid.Children.Add(_subPanelContainer);
 
@@ -790,38 +793,11 @@ namespace WidgUI
                 Margin = new Thickness(0, 2, 0, 2)
             };
 
-            string scrollBarStyleXaml = @"
-            <Style xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation"" 
-                   xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml"" 
-                   TargetType=""ScrollBar"">
-                <Setter Property=""Width"" Value=""5""/>
-                <Setter Property=""Template"">
-                    <Setter.Value>
-                        <ControlTemplate TargetType=""ScrollBar"">
-                            <Border Background=""Transparent"">
-                                <Track x:Name=""PART_Track"" IsDirectionReversed=""true"">
-                                    <Track.Thumb>
-                                        <Thumb>
-                                            <Thumb.Template>
-                                                <ControlTemplate TargetType=""Thumb"">
-                                                    <Border Background=""#606060"" CornerRadius=""2.5""/>
-                                                </ControlTemplate>
-                                            </Thumb.Template>
-                                        </Thumb>
-                                    </Track.Thumb>
-                                </Track>
-                            </Border>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>";
-
-            try
+            Style scrollStyle = GetCustomScrollBarStyle();
+            if (scrollStyle != null)
             {
-                Style scrollBarStyle = (Style)System.Windows.Markup.XamlReader.Parse(scrollBarStyleXaml);
-                _thumbnailsScrollViewer.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), scrollBarStyle);
+                _thumbnailsScrollViewer.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), scrollStyle);
             }
-            catch { }
 
             _thumbnailsStackPanel = new StackPanel
             {
@@ -1223,6 +1199,186 @@ namespace WidgUI
         }
         #endregion
 
+        #region Widgets Panel
+        private Style GetCustomScrollBarStyle()
+        {
+            string scrollBarStyleXaml = @"
+            <Style xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation"" 
+                   xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml"" 
+                   TargetType=""ScrollBar"">
+                <Setter Property=""Width"" Value=""5""/>
+                <Setter Property=""Template"">
+                    <Setter.Value>
+                        <ControlTemplate TargetType=""ScrollBar"">
+                            <Border Background=""Transparent"">
+                                <Track x:Name=""PART_Track"" IsDirectionReversed=""true"">
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType=""Thumb"">
+                                                    <Border Background=""#606060"" CornerRadius=""2.5""/>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>";
+            try
+            {
+                return (Style)System.Windows.Markup.XamlReader.Parse(scrollBarStyleXaml);
+            }
+            catch { return null; }
+        }
+
+        private void BuildWidgetsPanel()
+        {
+            _widgetsPanel = new Grid { Visibility = Visibility.Collapsed };
+
+            ScrollViewer scrollViewer = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+
+            Style scrollStyle = GetCustomScrollBarStyle();
+            if (scrollStyle != null)
+            {
+                scrollViewer.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), scrollStyle);
+            }
+
+            System.Windows.Controls.Primitives.UniformGrid grid = new System.Windows.Controls.Primitives.UniformGrid
+            {
+                Columns = 2,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+
+            // Add Clock Widget
+            Border clockWidget = CreateWidgetItem("Reloj", "\uE823", true, () => 
+            {
+                if (_mainWindow.IsVisible) _mainWindow.Hide(); else _mainWindow.Show();
+                return _mainWindow.IsVisible;
+            });
+            grid.Children.Add(clockWidget);
+
+            // Mock widgets
+            grid.Children.Add(CreateWidgetItem("Clima", "\uE706", false, null));
+            grid.Children.Add(CreateWidgetItem("Sistema", "\uE90F", false, null));
+            grid.Children.Add(CreateWidgetItem("Música", "\uE8D6", false, null));
+            grid.Children.Add(CreateWidgetItem("Notas", "\uE70B", false, null));
+            grid.Children.Add(CreateWidgetItem("Fotos", "\uE8B9", false, null));
+
+            scrollViewer.Content = grid;
+            _widgetsPanel.Children.Add(scrollViewer);
+        }
+
+        private Border CreateWidgetItem(string name, string iconGlyph, bool isActiveInitially, Func<bool> toggleAction)
+        {
+            bool isActive = isActiveInitially;
+
+            Border border = new Border
+            {
+                Height = 85,
+                Margin = new Thickness(4),
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(isActive ? Color.FromRgb(56, 189, 248) : Color.FromArgb(60, 255, 255, 255)),
+                BorderThickness = new Thickness(2),
+                Cursor = Cursors.Hand
+            };
+
+            Grid grid = new Grid();
+
+            StackPanel contentStack = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            TextBlock icon = new TextBlock
+            {
+                Text = iconGlyph,
+                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = 24,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
+            TextBlock text = new TextBlock
+            {
+                Text = name,
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+
+            contentStack.Children.Add(icon);
+            contentStack.Children.Add(text);
+            grid.Children.Add(contentStack);
+
+            Border editBtn = new Border
+            {
+                Width = 20,
+                Height = 20,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(4),
+                Visibility = isActive && toggleAction != null ? Visibility.Visible : Visibility.Collapsed,
+                Cursor = Cursors.Hand
+            };
+            TextBlock editIcon = new TextBlock
+            {
+                Text = "\uE70F", // Edit pencil glyph
+                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = 10,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            editBtn.Child = editIcon;
+
+            editBtn.MouseEnter += (s, e) => editBtn.Background = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
+            editBtn.MouseLeave += (s, e) => editBtn.Background = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
+            editBtn.MouseLeftButtonDown += (s, e) => 
+            {
+                e.Handled = true; 
+                ShowSubPanel("style");
+            };
+
+            grid.Children.Add(editBtn);
+            border.Child = grid;
+
+            border.MouseEnter += (s, e) =>
+            {
+                if (!isActive) border.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
+            };
+            border.MouseLeave += (s, e) =>
+            {
+                if (!isActive) border.BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
+            };
+            border.MouseLeftButtonDown += (s, e) =>
+            {
+                if (toggleAction != null)
+                {
+                    isActive = toggleAction();
+                    border.BorderBrush = new SolidColorBrush(isActive ? Color.FromRgb(56, 189, 248) : Color.FromArgb(60, 255, 255, 255));
+                    editBtn.Visibility = isActive ? Visibility.Visible : Visibility.Collapsed;
+                }
+            };
+
+            return border;
+        }
+        #endregion
+
         #region Subpanels Navigation and Width Animation
         private void ShowSubPanel(string panelName)
         {
@@ -1244,6 +1400,7 @@ namespace WidgUI
                 _stylePanel.Visibility = Visibility.Collapsed;
                 _settingsPanel.Visibility = Visibility.Collapsed;
                 _wallpaperPanel.Visibility = Visibility.Collapsed;
+                if (_widgetsPanel != null) _widgetsPanel.Visibility = Visibility.Collapsed;
 
                 if (panelName == "style")
                 {
@@ -1272,6 +1429,12 @@ namespace WidgUI
                     {
                         _thumbnailsScrollViewer.Focus();
                     }
+                }
+                else if (panelName == "widgets")
+                {
+                    _subPanelTitle.Text = "WIDGETS";
+                    _widgetsPanel.Visibility = Visibility.Visible;
+                    AnimateMenuSize(260, 360);
                 }
 
                 // 3. Make subpanel container visible but transparent
