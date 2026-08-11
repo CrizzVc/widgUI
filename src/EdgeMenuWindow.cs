@@ -206,7 +206,7 @@ namespace WidgUI
                 Width = 3,
                 Height = 120,
                 ClipToBounds = true,
-                Background = new SolidColorBrush(Color.FromRgb(32, 32, 32)), // #202020
+                Background = new SolidColorBrush(Color.FromRgb(10, 6, 5)), // #020305ff
                 BorderBrush = new SolidColorBrush(Color.FromArgb(120, 56, 189, 248)), // Celeste glow
                 BorderThickness = new Thickness(0, 1.5, 1.5, 1.5), // No border on left side
                 CornerRadius = new CornerRadius(6, 20, 20, 6), // Small curve at screen edge junction
@@ -703,7 +703,7 @@ namespace WidgUI
             // 2. Thumbnails Container
             _thumbnailsContainer = new Grid { Visibility = Visibility.Collapsed };
             _thumbnailsContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _thumbnailsContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _thumbnailsContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             // Folder path & edit button row
             Grid folderRow = new Grid { Margin = new Thickness(2, 0, 2, 6) };
@@ -763,7 +763,7 @@ namespace WidgUI
             _thumbnailsScrollViewer = new ScrollViewer
             {
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 Margin = new Thickness(0, 2, 0, 2)
             };
 
@@ -952,8 +952,6 @@ namespace WidgUI
             border.MouseEnter += (s, e) =>
             {
                 border.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248)); // sky blue glow
-                // Change wallpaper dynamically on hover
-                HoverWallpaper(filePath);
             };
 
             border.MouseLeave += (s, e) =>
@@ -1125,26 +1123,14 @@ namespace WidgUI
             Border selected = _thumbnailsStackPanel.Children[_selectedThumbnailIndex] as Border;
             if (selected != null)
             {
-                try
-                {
-                    selected.BringIntoView();
-                    
-                    // Try to center the item perfectly in the ScrollViewer
-                    selected.UpdateLayout();
-                    GeneralTransform transform = selected.TransformToAncestor(_thumbnailsScrollViewer);
-                    Point position = transform.Transform(new Point(0, 0));
-                    double targetOffset = position.Y + _thumbnailsScrollViewer.VerticalOffset 
-                                        - (_thumbnailsScrollViewer.ViewportHeight / 2) 
-                                        + (selected.ActualHeight / 2);
-                    
-                    if (targetOffset < 0) targetOffset = 0;
-                    _thumbnailsScrollViewer.ScrollToVerticalOffset(targetOffset);
-                }
-                catch
-                {
-                    // Fallback to basic BringIntoView if layout transform fails
-                    selected.BringIntoView();
-                }
+                // Each thumbnail has Height=90, Margin=3 top + 3 bottom = 96
+                double itemHeight = 96.0;
+                double center = (_selectedThumbnailIndex * itemHeight) + (itemHeight / 2.0);
+                double targetOffset = center - (_thumbnailsScrollViewer.ViewportHeight / 2.0);
+                
+                if (targetOffset < 0) targetOffset = 0;
+                
+                _thumbnailsScrollViewer.ScrollToVerticalOffset(targetOffset);
             }
 
             // Preview the wallpaper
