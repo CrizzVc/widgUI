@@ -47,6 +47,60 @@ namespace WidgUI
             this.Loaded += MainWindow_Loaded;
         }
 
+        public bool Is24HourFormat
+        {
+            get { return _is24HourFormat; }
+            set
+            {
+                if (_is24HourFormat != value)
+                {
+                    _is24HourFormat = value;
+                    UpdateTimeDisplay();
+                    SetupContextMenu();
+                }
+            }
+        }
+
+        public bool ShowDate
+        {
+            get { return _showDate; }
+            set
+            {
+                if (_showDate != value)
+                {
+                    _showDate = value;
+                    UpdateTimeDisplay();
+                    SetupContextMenu();
+                }
+            }
+        }
+
+        public bool IsLocked
+        {
+            get { return _isLocked; }
+            set
+            {
+                if (_isLocked != value)
+                {
+                    _isLocked = value;
+                    SetupContextMenu();
+                }
+            }
+        }
+
+        public WidgetStyleVariant CurrentVariant
+        {
+            get { return _currentVariant; }
+            set
+            {
+                if (_currentVariant != value)
+                {
+                    ApplyStyleVariant(value);
+                    SetupContextMenu();
+                }
+            }
+        }
+
         private void InitializeWindow()
         {
             this.Title = "widgUI - Reloj Desktop";

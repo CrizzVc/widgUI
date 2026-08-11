@@ -27,9 +27,11 @@ namespace WidgUI
                 };
 
                 MainWindow mainWindow = new MainWindow();
+                EdgeMenuWindow edgeMenu = new EdgeMenuWindow(mainWindow);
                 _trayManager = new TrayManager(mainWindow);
 
                 mainWindow.Show();
+                edgeMenu.Show();
                 app.Run();
 
                 if (_trayManager != null)
