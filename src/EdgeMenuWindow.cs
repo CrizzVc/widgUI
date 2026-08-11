@@ -205,10 +205,10 @@ namespace WidgUI
                 VerticalAlignment = VerticalAlignment.Center, // Anchor center
                 Width = 3,
                 Height = 120,
-                ClipToBounds = true,
-                Background = new SolidColorBrush(Color.FromRgb(10, 6, 5)), // #020305ff
-                BorderBrush = new SolidColorBrush(Color.FromArgb(120, 56, 189, 248)), // Celeste glow
-                BorderThickness = new Thickness(0, 1.5, 1.5, 1.5), // No border on left side
+                ClipToBounds = false, // Allow flairs to stick out
+                Background = Brushes.Black, // Pure black edge
+                BorderBrush = Brushes.Transparent, // Removed blue border
+                BorderThickness = new Thickness(0), // Removed blue border
                 CornerRadius = new CornerRadius(0, 20, 20, 0), // Flat on the left, rounded on the right
                 Margin = new Thickness(0, 0, 2, 0), // Room for right border stroke
                 Visibility = Visibility.Collapsed,
@@ -228,6 +228,29 @@ namespace WidgUI
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch
             };
+
+            // Top Flair for the inverse curve
+            System.Windows.Shapes.Path topFlair = new System.Windows.Shapes.Path
+            {
+                Fill = Brushes.Black,
+                Data = Geometry.Parse("M 0,0 L 0,20 L 20,20 A 20,20 0 0,1 0,0 Z"),
+                VerticalAlignment = VerticalAlignment.Top,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, -20, 0, 0)
+            };
+            _menuGrid.Children.Add(topFlair);
+
+            // Bottom Flair for the inverse curve
+            System.Windows.Shapes.Path bottomFlair = new System.Windows.Shapes.Path
+            {
+                Fill = Brushes.Black,
+                Data = Geometry.Parse("M 0,0 L 20,0 A 20,20 0 0,0 0,20 Z"),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, -20)
+            };
+            _menuGrid.Children.Add(bottomFlair);
+
             _menuBorder.Child = _menuGrid;
 
             // 2.a. Expanded Main Menu Grid
