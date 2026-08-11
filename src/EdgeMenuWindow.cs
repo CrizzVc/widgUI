@@ -767,6 +767,39 @@ namespace WidgUI
                 Margin = new Thickness(0, 2, 0, 2)
             };
 
+            string scrollBarStyleXaml = @"
+            <Style xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation"" 
+                   xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml"" 
+                   TargetType=""ScrollBar"">
+                <Setter Property=""Width"" Value=""5""/>
+                <Setter Property=""Template"">
+                    <Setter.Value>
+                        <ControlTemplate TargetType=""ScrollBar"">
+                            <Border Background=""Transparent"">
+                                <Track x:Name=""PART_Track"" IsDirectionReversed=""true"">
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType=""Thumb"">
+                                                    <Border Background=""#606060"" CornerRadius=""2.5""/>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>";
+
+            try
+            {
+                Style scrollBarStyle = (Style)System.Windows.Markup.XamlReader.Parse(scrollBarStyleXaml);
+                _thumbnailsScrollViewer.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), scrollBarStyle);
+            }
+            catch { }
+
             _thumbnailsStackPanel = new StackPanel
             {
                 Orientation = Orientation.Vertical,
