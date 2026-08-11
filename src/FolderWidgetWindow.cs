@@ -29,7 +29,7 @@ namespace WidgUI
         private Border _cardBorder;
         private Grid _mainGrid;
         private UniformGrid _iconsGrid;
-        private Border _closeButton;
+        private Border _dropOverlay;
         
         // Overlay window for blur/dim background
         private Window _overlayWindow;
@@ -74,7 +74,16 @@ namespace WidgUI
             // Allow drag and drop
             this.AllowDrop = true;
             this.DragEnter += FolderWidgetWindow_DragEnter;
+            this.DragLeave += FolderWidgetWindow_DragLeave;
             this.Drop += FolderWidgetWindow_Drop;
+
+            this.Deactivated += (s, e) =>
+            {
+                if (_isExpanded)
+                {
+                    AnimateExpansion(false);
+                }
+            };
 
             double screenWidth = SystemParameters.PrimaryScreenWidth;
             this.Left = screenWidth - this.Width - 50;
@@ -100,13 +109,25 @@ namespace WidgUI
         private void FolderWidgetWindow_DragEnter(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
                 e.Effects = DragDropEffects.Copy;
+                if (_dropOverlay != null) _dropOverlay.Visibility = Visibility.Visible;
+            }
             else
+            {
                 e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private void FolderWidgetWindow_DragLeave(object sender, DragEventArgs e)
+        {
+            if (_dropOverlay != null) _dropOverlay.Visibility = Visibility.Collapsed;
         }
 
         private void FolderWidgetWindow_Drop(object sender, DragEventArgs e)
         {
+            if (_dropOverlay != null) _dropOverlay.Visibility = Visibility.Collapsed;
+
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
                 string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
@@ -155,44 +176,23 @@ namespace WidgUI
             };
             _mainGrid.Children.Add(_iconsGrid);
 
-            // Close button for expanded state
-            _closeButton = new Border
+            _dropOverlay = new Border
             {
-                Width = 28,
-                Height = 28,
-                CornerRadius = new CornerRadius(14),
-                Background = new SolidColorBrush(Color.FromArgb(180, 0, 0, 0)),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, -8, -8, 0),
-                Visibility = Visibility.Collapsed,
-                Opacity = 0,
-                Cursor = Cursors.Hand
+                Background = new SolidColorBrush(Color.FromArgb(200, 0, 0, 0)),
+                CornerRadius = new CornerRadius(30),
+                Visibility = Visibility.Collapsed
             };
-            TextBlock closeText = new TextBlock
+            TextBlock dropText = new TextBlock
             {
-                Text = "✕",
+                Text = "Suelta aquí",
                 Foreground = Brushes.White,
+                FontSize = 18,
                 FontWeight = FontWeights.Bold,
-                FontSize = 12,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            _closeButton.Child = closeText;
-            _closeButton.MouseLeftButtonDown += (s, e) => 
-            {
-                e.Handled = true;
-                AnimateExpansion(false);
-            };
-            _closeButton.MouseEnter += (s, e) =>
-            {
-                _closeButton.Background = new SolidColorBrush(Color.FromArgb(220, 220, 50, 50));
-            };
-            _closeButton.MouseLeave += (s, e) =>
-            {
-                _closeButton.Background = new SolidColorBrush(Color.FromArgb(180, 0, 0, 0));
-            };
-            _mainGrid.Children.Add(_closeButton);
+            _dropOverlay.Child = dropText;
+            _mainGrid.Children.Add(_dropOverlay);
 
             _cardBorder.Child = _mainGrid;
             this.Content = _cardBorder;
@@ -378,19 +378,18 @@ namespace WidgUI
                 this.Activate();
                 this.Focus();
                 
-                // Animate size with subtle overshoot
+                // Animate size and position with identical smooth quintic ease to keep them perfectly in sync
                 DoubleAnimation animW = new DoubleAnimation
                 {
                     From = COLLAPSED_WIDTH, To = targetWidth,
-                    Duration = moveDuration, EasingFunction = expandEasing
+                    Duration = moveDuration, EasingFunction = moveEasing
                 };
                 DoubleAnimation animH = new DoubleAnimation
                 {
                     From = COLLAPSED_HEIGHT, To = targetHeight,
-                    Duration = moveDuration, EasingFunction = expandEasing
+                    Duration = moveDuration, EasingFunction = moveEasing
                 };
                 
-                // Animate position with smooth quintic ease
                 DoubleAnimation animLeft = new DoubleAnimation
                 {
                     From = _originalLeft, To = targetLeft,
@@ -425,17 +424,6 @@ namespace WidgUI
                     shadow.BeginAnimation(DropShadowEffect.OpacityProperty, shadowOpacity);
                     shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty, shadowDepth);
                 }
-                
-                // Show close button with delayed fade
-                _closeButton.Visibility = Visibility.Visible;
-                DoubleAnimation fadeIn = new DoubleAnimation
-                {
-                    From = 0, To = 1,
-                    Duration = TimeSpan.FromMilliseconds(250),
-                    BeginTime = TimeSpan.FromMilliseconds(300),
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-                };
-                _closeButton.BeginAnimation(UIElement.OpacityProperty, fadeIn);
                 
                 animW.Completed += (s, e) =>
                 {
@@ -507,15 +495,6 @@ namespace WidgUI
                     shadow.BeginAnimation(DropShadowEffect.OpacityProperty, shadowOpacity);
                     shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty, shadowDepth);
                 }
-                
-                // Hide close button quickly
-                DoubleAnimation fadeOut = new DoubleAnimation
-                {
-                    To = 0, Duration = TimeSpan.FromMilliseconds(120),
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
-                };
-                fadeOut.Completed += (s, e) => _closeButton.Visibility = Visibility.Collapsed;
-                _closeButton.BeginAnimation(UIElement.OpacityProperty, fadeOut);
                 
                 animW.Completed += (s, e) =>
                 {
