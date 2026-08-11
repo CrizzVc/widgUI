@@ -1,11 +1,13 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
@@ -43,10 +45,11 @@ namespace WidgUI
         private MainWindow _mainWindow;
         
         private Border _collapsedIndicator;
-        private Grid _layoutGrid;
+        private Border _menuBorder;
+        private Grid _menuGrid;
         
         // Expanded main menu
-        private Grid _expandedContainer;
+        private Grid _mainMenuGrid;
         private TextBlock _appNameText;
         private Grid _buttonsGrid;
         
@@ -55,12 +58,11 @@ namespace WidgUI
         private Border _btnSettings;
         private Border _btnWallpaper;
 
-        // Subpanel border
-        private Border _subPanelBorder;
-        private Border _divider; // Dummy to prevent reference errors
-
         // Subpanels container
         private Grid _subPanelContainer;
+        private Border _btnBack;
+        private TextBlock _subPanelTitle;
+        private Grid _subPanelContentGrid;
         private Grid _stylePanel;
         private Grid _settingsPanel;
         private Grid _wallpaperPanel;
@@ -80,6 +82,17 @@ namespace WidgUI
         private string _activeSubPanel = null; // "style", "settings", "wallpaper", or null
         private bool _isHovered = false;
         private DispatcherTimer _hoverTimer;
+
+        // Wallpaper subpanel state
+        private string _wallpaperFolderPath = null;
+        private string _activeWallpaperPath = null;
+        private StackPanel _thumbnailsStackPanel;
+        private ScrollViewer _thumbnailsScrollViewer;
+        private Grid _chooseFolderContainer;
+        private Grid _thumbnailsContainer;
+        private TextBlock _folderPathText;
+        private DispatcherTimer _wallpaperDebounceTimer;
+        private string _pendingWallpaperPath;
 
         public EdgeMenuWindow(MainWindow mainWindow)
         {
@@ -133,7 +146,7 @@ namespace WidgUI
             // Root Grid
             Grid rootGrid = new Grid
             {
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch
             };
 
@@ -150,27 +163,18 @@ namespace WidgUI
             };
             rootGrid.Children.Add(_collapsedIndicator);
 
-            // 2. Expanded Grid (Col 0: Tab shape & buttons, Col 1: Sub-panels)
-            _layoutGrid = new Grid
+            // 2. Unified Menu Border (Stretches with Window width)
+            _menuBorder = new Border
             {
-                Width = 262,
-                Height = 300,
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center,
-                Visibility = Visibility.Collapsed
-            };
-            _layoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(62) });  // Tab (60px + 2px margin)
-            _layoutGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) }); // Subpanel
-
-            // 2.a. Curved Tab Path (Column 0)
-            System.Windows.Shapes.Path menuPath = new System.Windows.Shapes.Path
-            {
-                Data = Geometry.Parse("M 0,10 C 0,40 60,40 60,70 L 60,210 C 60,240 0,240 0,270 Z"),
-                Fill = new SolidColorBrush(Color.FromArgb(235, 20, 20, 30)), // Elegant dark glass background
-                Stroke = new SolidColorBrush(Color.FromArgb(160, 56, 189, 248)),
-                StrokeThickness = 1.5,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center,
+                Height = 200,
+                Background = new SolidColorBrush(Color.FromArgb(235, 15, 23, 42)), // Slate-900 transparent glass
+                BorderBrush = new SolidColorBrush(Color.FromArgb(160, 56, 189, 248)), // Celeste glow
+                BorderThickness = new Thickness(0, 1.5, 1.5, 1.5), // No border on left side
+                CornerRadius = new CornerRadius(0, 20, 20, 0),
+                Margin = new Thickness(0, 0, 2, 0), // Room for right border stroke
+                Visibility = Visibility.Collapsed,
                 Effect = new DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -180,20 +184,22 @@ namespace WidgUI
                     BlurRadius = 12
                 }
             };
-            Grid.SetColumn(menuPath, 0);
-            _layoutGrid.Children.Add(menuPath);
 
-            // 2.b. Expanded Container (holds rotated text or vertical button stack)
-            _expandedContainer = new Grid
+            _menuGrid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            _menuBorder.Child = _menuGrid;
+
+            // 2.a. Expanded Main Menu Grid
+            _mainMenuGrid = new Grid
             {
                 Width = 60,
-                Height = 140,
                 HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Stretch
             };
-            Grid.SetColumn(_expandedContainer, 0);
 
-            // 2.c. App Name (rotated -90 degrees vertically)
             _appNameText = new TextBlock
             {
                 Text = "widgUI",
@@ -206,9 +212,8 @@ namespace WidgUI
                 Opacity = 0,
                 LayoutTransform = new RotateTransform(-90)
             };
-            _expandedContainer.Children.Add(_appNameText);
+            _mainMenuGrid.Children.Add(_appNameText);
 
-            // 2.d. Vertical Buttons Grid
             _buttonsGrid = new Grid
             {
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -231,58 +236,67 @@ namespace WidgUI
             Grid.SetRow(_btnSettings, 1);
             _buttonsGrid.Children.Add(_btnSettings);
 
-            _btnWallpaper = CreateIconButton("\uE723", "Fondo", Color.FromRgb(244, 114, 182)); // Pink
+            // Change background icon to picture frame (\uE722)
+            _btnWallpaper = CreateIconButton("\uE722", "Fondo", Color.FromRgb(244, 114, 182)); // Pink
             _btnWallpaper.MouseLeftButtonDown += (s, e) => ShowSubPanel("wallpaper");
             Grid.SetRow(_btnWallpaper, 2);
             _buttonsGrid.Children.Add(_btnWallpaper);
 
-            _expandedContainer.Children.Add(_buttonsGrid);
-            _layoutGrid.Children.Add(_expandedContainer);
+            _mainMenuGrid.Children.Add(_buttonsGrid);
+            _menuGrid.Children.Add(_mainMenuGrid);
 
-            // 3. Sub-panel Border
-            _subPanelBorder = new Border
-            {
-                Width = 200,
-                Height = 140,
-                Background = new SolidColorBrush(Color.FromArgb(235, 20, 20, 30)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(160, 56, 189, 248)),
-                BorderThickness = new Thickness(0, 1.5, 1.5, 1.5),
-                CornerRadius = new CornerRadius(0, 16, 16, 0),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center,
-                Visibility = Visibility.Collapsed,
-                Effect = new DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    Direction = 315,
-                    ShadowDepth = 4,
-                    Opacity = 0.4,
-                    BlurRadius = 12
-                }
-            };
-            Grid.SetColumn(_subPanelBorder, 1);
-
+            // 2.b. Sub-panels Container (Width 198 fits perfectly with 10px margins inside 218px border)
             _subPanelContainer = new Grid
             {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Width = 198,
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Stretch,
-                Margin = new Thickness(10, 8, 10, 8)
+                Margin = new Thickness(10, 8, 10, 8),
+                Visibility = Visibility.Collapsed
             };
+            _subPanelContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Header
+            _subPanelContainer.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Content
+
+            // Header Grid
+            Grid headerGrid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            _btnBack = CreateBackButton();
+            Grid.SetColumn(_btnBack, 0);
+            headerGrid.Children.Add(_btnBack);
+
+            _subPanelTitle = new TextBlock
+            {
+                Text = "ESTILO DEL RELOJ",
+                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+                FontWeight = FontWeights.Bold,
+                FontSize = 9.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(_subPanelTitle, 1);
+            headerGrid.Children.Add(_subPanelTitle);
+
+            Grid.SetRow(headerGrid, 0);
+            _subPanelContainer.Children.Add(headerGrid);
+
+            // Subpanel contents grid
+            _subPanelContentGrid = new Grid();
+            Grid.SetRow(_subPanelContentGrid, 1);
+            _subPanelContainer.Children.Add(_subPanelContentGrid);
 
             BuildStylePanel();
             BuildSettingsPanel();
             BuildWallpaperPanel();
 
-            _subPanelContainer.Children.Add(_stylePanel);
-            _subPanelContainer.Children.Add(_settingsPanel);
-            _subPanelContainer.Children.Add(_wallpaperPanel);
-            _subPanelBorder.Child = _subPanelContainer;
-            _layoutGrid.Children.Add(_subPanelBorder);
+            _subPanelContentGrid.Children.Add(_stylePanel);
+            _subPanelContentGrid.Children.Add(_settingsPanel);
+            _subPanelContentGrid.Children.Add(_wallpaperPanel);
 
-            // Dummy divider to prevent compiler errors
-            _divider = new Border { Visibility = Visibility.Collapsed };
+            _menuGrid.Children.Add(_subPanelContainer);
 
-            rootGrid.Children.Add(_layoutGrid);
+            rootGrid.Children.Add(_menuBorder);
             this.Content = rootGrid;
         }
 
@@ -327,24 +341,54 @@ namespace WidgUI
             return border;
         }
 
+        private Border CreateBackButton()
+        {
+            Border border = new Border
+            {
+                Width = 20,
+                Height = 20,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                Margin = new Thickness(0, 0, 8, 0),
+                ToolTip = "Volver"
+            };
+
+            TextBlock textBlock = new TextBlock
+            {
+                Text = "\uE72B", // Left arrow glyph
+                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = 9,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            border.Child = textBlock;
+
+            border.MouseEnter += (s, e) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromArgb(80, 56, 189, 248)); // sky blue hover
+                border.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+            };
+
+            border.MouseLeave += (s, e) =>
+            {
+                border.Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+                border.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+            };
+
+            border.MouseLeftButtonDown += (s, e) => GoBackToMainMenu();
+
+            return border;
+        }
+
         #region Style Panel
         private void BuildStylePanel()
         {
             _stylePanel = new Grid { Visibility = Visibility.Collapsed };
-            _stylePanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _stylePanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-            TextBlock title = new TextBlock
-            {
-                Text = "ESTILO DEL RELOJ",
-                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
-                FontWeight = FontWeights.Bold,
-                FontSize = 9,
-                Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
-                Margin = new Thickness(4, 0, 0, 4)
-            };
-            Grid.SetRow(title, 0);
-            _stylePanel.Children.Add(title);
 
             Grid grid = new Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -372,7 +416,6 @@ namespace WidgUI
             Grid.SetColumn(_styleBtnCompact, 1);
             grid.Children.Add(_styleBtnCompact);
 
-            Grid.SetRow(grid, 1);
             _stylePanel.Children.Add(grid);
         }
 
@@ -448,20 +491,7 @@ namespace WidgUI
         private void BuildSettingsPanel()
         {
             _settingsPanel = new Grid { Visibility = Visibility.Collapsed };
-            _settingsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _settingsPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-            TextBlock title = new TextBlock
-            {
-                Text = "AJUSTES WIDGET",
-                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
-                FontWeight = FontWeights.Bold,
-                FontSize = 9,
-                Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
-                Margin = new Thickness(4, 0, 0, 4)
-            };
-            Grid.SetRow(title, 0);
-            _settingsPanel.Children.Add(title);
 
             Grid grid = new Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -516,7 +546,6 @@ namespace WidgUI
             Grid.SetColumn(btnExit, 1);
             grid.Children.Add(btnExit);
 
-            Grid.SetRow(grid, 1);
             _settingsPanel.Children.Add(grid);
         }
 
@@ -589,164 +618,375 @@ namespace WidgUI
         private void BuildWallpaperPanel()
         {
             _wallpaperPanel = new Grid { Visibility = Visibility.Collapsed };
-            _wallpaperPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _wallpaperPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            
+            // 1. Choose Folder Container
+            _chooseFolderContainer = new Grid { Visibility = Visibility.Collapsed };
+            _chooseFolderContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _chooseFolderContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            TextBlock title = new TextBlock
+            TextBlock chooseMsg = new TextBlock
             {
-                Text = "FONDO DE ESCRITORIO",
-                FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
-                FontWeight = FontWeights.Bold,
-                FontSize = 9,
+                Text = "Selecciona una carpeta para ver tus fondos de pantalla:",
                 Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
-                Margin = new Thickness(4, 0, 0, 4)
+                FontSize = 9.5,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(10, 10, 10, 15)
             };
-            Grid.SetRow(title, 0);
-            _wallpaperPanel.Children.Add(title);
+            Grid.SetRow(chooseMsg, 0);
+            _chooseFolderContainer.Children.Add(chooseMsg);
 
-            Grid grid = new Grid();
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            // File Dialog Selector Button
-            Border btnBrowse = new Border
+            Border btnSelectFolder = new Border
             {
-                Height = 18,
-                Margin = new Thickness(2),
-                CornerRadius = new CornerRadius(9),
-                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                Cursor = Cursors.Hand
+                Height = 22,
+                Width = 110,
+                CornerRadius = new CornerRadius(11),
+                Background = new SolidColorBrush(Color.FromRgb(56, 189, 248)), // sky blue
+                Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Center
             };
-            TextBlock tbBrowse = new TextBlock
+            TextBlock tbSelect = new TextBlock
             {
-                Text = "Examinar Imagen...",
-                FontSize = 8.5,
-                FontWeight = FontWeights.SemiBold,
+                Text = "Elegir Carpeta",
+                FontSize = 9,
+                FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            btnBrowse.Child = tbBrowse;
-            btnBrowse.MouseEnter += (s, e) => btnBrowse.Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255));
-            btnBrowse.MouseLeave += (s, e) => btnBrowse.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-            btnBrowse.MouseLeftButtonDown += (s, e) => OpenWallpaperDialog();
+            btnSelectFolder.Child = tbSelect;
+            btnSelectFolder.MouseEnter += (s, e) => btnSelectFolder.Background = new SolidColorBrush(Color.FromRgb(14, 165, 233));
+            btnSelectFolder.MouseLeave += (s, e) => btnSelectFolder.Background = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+            btnSelectFolder.MouseLeftButtonDown += (s, e) => SelectWallpaperFolder();
 
-            Grid.SetRow(btnBrowse, 0);
-            Grid.SetColumnSpan(btnBrowse, 2);
-            grid.Children.Add(btnBrowse);
+            Grid.SetRow(btnSelectFolder, 1);
+            _chooseFolderContainer.Children.Add(btnSelectFolder);
+            _wallpaperPanel.Children.Add(_chooseFolderContainer);
 
-            // Sunset Preset
-            Border btnSunset = CreatePresetWallpaperButton("Atardecer", Color.FromRgb(244, 63, 94)); // Sunset red/pink
-            btnSunset.MouseLeftButtonDown += (s, e) => SetPresetWallpaper("AtardecerAura", System.Drawing.Color.FromArgb(26, 21, 44), System.Drawing.Color.FromArgb(244, 114, 182));
-            Grid.SetRow(btnSunset, 1);
-            Grid.SetColumn(btnSunset, 0);
-            grid.Children.Add(btnSunset);
+            // 2. Thumbnails Container
+            _thumbnailsContainer = new Grid { Visibility = Visibility.Collapsed };
+            _thumbnailsContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _thumbnailsContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            // Midnight Preset
-            Border btnMidnight = CreatePresetWallpaperButton("Medianoche", Color.FromRgb(14, 165, 233)); // Midnight blue
-            btnMidnight.MouseLeftButtonDown += (s, e) => SetPresetWallpaper("AzulMedianoche", System.Drawing.Color.FromArgb(15, 23, 42), System.Drawing.Color.FromArgb(56, 189, 248));
-            Grid.SetRow(btnMidnight, 1);
-            Grid.SetColumn(btnMidnight, 1);
-            grid.Children.Add(btnMidnight);
+            // Folder path & edit button row
+            Grid folderRow = new Grid { Margin = new Thickness(2, 0, 2, 6) };
+            folderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            folderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            Grid.SetRow(grid, 1);
-            _wallpaperPanel.Children.Add(grid);
+            _folderPathText = new TextBlock
+            {
+                Text = "Carpeta: ...",
+                Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                FontSize = 8,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(_folderPathText, 0);
+            folderRow.Children.Add(_folderPathText);
+
+            Border btnChangeFolder = new Border
+            {
+                Width = 18,
+                Height = 18,
+                CornerRadius = new CornerRadius(9),
+                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                ToolTip = "Cambiar carpeta"
+            };
+            TextBlock changeIcon = new TextBlock
+            {
+                Text = "\uE838", // Folder glyph in Segoe MDL2 Assets
+                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = 9,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            btnChangeFolder.Child = changeIcon;
+            btnChangeFolder.MouseEnter += (s, e) =>
+            {
+                btnChangeFolder.Background = new SolidColorBrush(Color.FromArgb(80, 244, 114, 182)); // pinkish hover
+                btnChangeFolder.BorderBrush = new SolidColorBrush(Color.FromRgb(244, 114, 182));
+            };
+            btnChangeFolder.MouseLeave += (s, e) =>
+            {
+                btnChangeFolder.Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+                btnChangeFolder.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+            };
+            btnChangeFolder.MouseLeftButtonDown += (s, e) => SelectWallpaperFolder();
+            Grid.SetColumn(btnChangeFolder, 1);
+            folderRow.Children.Add(btnChangeFolder);
+
+            Grid.SetRow(folderRow, 0);
+            _thumbnailsContainer.Children.Add(folderRow);
+
+            // Horizontal scroll viewer for thumbnails
+            _thumbnailsScrollViewer = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Height = 55,
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+            // Enable mouse wheel horizontal scrolling
+            _thumbnailsScrollViewer.PreviewMouseWheel += (s, e) =>
+            {
+                _thumbnailsScrollViewer.ScrollToHorizontalOffset(_thumbnailsScrollViewer.HorizontalOffset - e.Delta);
+                e.Handled = true;
+            };
+
+            _thumbnailsStackPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _thumbnailsScrollViewer.Content = _thumbnailsStackPanel;
+
+            Grid.SetRow(_thumbnailsScrollViewer, 1);
+            _thumbnailsContainer.Children.Add(_thumbnailsScrollViewer);
+
+            _wallpaperPanel.Children.Add(_thumbnailsContainer);
         }
 
-        private Border CreatePresetWallpaperButton(string text, Color baseColor)
+        private void SelectWallpaperFolder()
+        {
+            using (var dialog = new System.Windows.Forms.FolderBrowserDialog())
+            {
+                dialog.Description = "Selecciona la carpeta que contiene tus fondos de pantalla";
+                dialog.ShowNewFolderButton = false;
+                
+                var result = dialog.ShowDialog();
+                if (result == System.Windows.Forms.DialogResult.OK)
+                {
+                    string path = dialog.SelectedPath;
+                    if (Directory.Exists(path))
+                    {
+                        _wallpaperFolderPath = path;
+                        SaveWallpaperFolder(path);
+                        LoadWallpaperPanelContent();
+                    }
+                }
+            }
+        }
+
+        private string GetSavedWallpaperFolder()
+        {
+            try
+            {
+                string configDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "widgUI");
+                string configFile = Path.Combine(configDir, "wallpaper_folder.txt");
+                if (File.Exists(configFile))
+                {
+                    string path = File.ReadAllText(configFile).Trim();
+                    if (Directory.Exists(path))
+                    {
+                        return path;
+                    }
+                }
+            }
+            catch {}
+            return null;
+        }
+
+        private void SaveWallpaperFolder(string path)
+        {
+            try
+            {
+                string configDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "widgUI");
+                if (!Directory.Exists(configDir))
+                {
+                    Directory.CreateDirectory(configDir);
+                }
+                string configFile = Path.Combine(configDir, "wallpaper_folder.txt");
+                File.WriteAllText(configFile, path);
+            }
+            catch {}
+        }
+
+        private void LoadWallpaperPanelContent()
+        {
+            if (string.IsNullOrEmpty(_wallpaperFolderPath))
+            {
+                _wallpaperFolderPath = GetSavedWallpaperFolder();
+            }
+
+            if (string.IsNullOrEmpty(_wallpaperFolderPath) || !Directory.Exists(_wallpaperFolderPath))
+            {
+                _chooseFolderContainer.Visibility = Visibility.Visible;
+                _thumbnailsContainer.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            _chooseFolderContainer.Visibility = Visibility.Collapsed;
+            _thumbnailsContainer.Visibility = Visibility.Visible;
+
+            _folderPathText.Text = "Carpeta: " + Path.GetFileName(_wallpaperFolderPath);
+            _folderPathText.ToolTip = _wallpaperFolderPath;
+
+            // Clear previous thumbnails
+            _thumbnailsStackPanel.Children.Clear();
+
+            // Load images from folder
+            try
+            {
+                string[] files = Directory.GetFiles(_wallpaperFolderPath, "*.*")
+                    .Where(file => file.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                   file.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                                   file.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                                   file.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+
+                if (files.Length == 0)
+                {
+                    TextBlock noImagesText = new TextBlock
+                    {
+                        Text = "Sin imágenes en la carpeta.",
+                        Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                        FontSize = 9,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(10, 20, 10, 20)
+                    };
+                    _thumbnailsStackPanel.Children.Add(noImagesText);
+                    return;
+                }
+
+                foreach (string file in files)
+                {
+                    Border thumbBorder = CreateThumbnail(file);
+                    _thumbnailsStackPanel.Children.Add(thumbBorder);
+                }
+            }
+            catch (Exception ex)
+            {
+                TextBlock errText = new TextBlock
+                {
+                    Text = "Error: " + ex.Message,
+                    Foreground = Brushes.Red,
+                    FontSize = 8,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(5)
+                };
+                _thumbnailsStackPanel.Children.Add(errText);
+            }
+        }
+
+        private Border CreateThumbnail(string filePath)
         {
             Border border = new Border
             {
-                Height = 18,
-                Margin = new Thickness(2),
-                CornerRadius = new CornerRadius(9),
-                Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                Cursor = Cursors.Hand
+                Width = 80,
+                Height = 45,
+                Margin = new Thickness(4, 2, 4, 2),
+                CornerRadius = new CornerRadius(5),
+                BorderThickness = new Thickness(1.5),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                Background = new SolidColorBrush(Color.FromArgb(30, 0, 0, 0)),
+                Cursor = Cursors.Hand,
+                ToolTip = Path.GetFileName(filePath),
+                ClipToBounds = true
             };
 
-            TextBlock tb = new TextBlock
+            // Image control to display thumbnail
+            System.Windows.Controls.Image img = new System.Windows.Controls.Image
             {
-                Text = text,
-                FontSize = 8.5,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                Stretch = Stretch.UniformToFill
             };
-            border.Child = tb;
+
+            // Load BitmapImage with DecodePixelWidth for efficiency
+            try
+            {
+                BitmapImage bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(filePath);
+                bmp.DecodePixelWidth = 80;
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.CreateOptions = BitmapCreateOptions.DelayCreation;
+                bmp.EndInit();
+                img.Source = bmp;
+            }
+            catch
+            {
+                // If loading fails, show nothing
+            }
+
+            Grid grid = new Grid();
+            grid.Children.Add(img);
+            border.Child = grid;
 
             border.MouseEnter += (s, e) =>
             {
-                border.Background = new SolidColorBrush(Color.FromArgb(90, baseColor.R, baseColor.G, baseColor.B));
-                border.BorderBrush = new SolidColorBrush(baseColor);
+                border.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248)); // sky blue glow
+                // Change wallpaper dynamically on hover
+                HoverWallpaper(filePath);
             };
+
             border.MouseLeave += (s, e) =>
             {
-                border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
-                border.BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255));
+                if (_activeWallpaperPath != filePath)
+                {
+                    border.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+                }
+            };
+
+            border.MouseLeftButtonDown += (s, e) =>
+            {
+                _activeWallpaperPath = filePath;
+                // Set permanently
+                SetWallpaper(filePath);
+                
+                // Highlight only this active one
+                foreach (object child in _thumbnailsStackPanel.Children)
+                {
+                    Border b = child as Border;
+                    if (b != null)
+                    {
+                        if (b.ToolTip != null && b.ToolTip.ToString() == Path.GetFileName(_activeWallpaperPath))
+                        {
+                            b.BorderBrush = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // Green for selected
+                        }
+                        else
+                        {
+                            b.BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255));
+                        }
+                    }
+                }
+                border.BorderBrush = new SolidColorBrush(Color.FromRgb(34, 197, 94));
             };
 
             return border;
         }
 
-        private void OpenWallpaperDialog()
+        private void HoverWallpaper(string filePath)
         {
-            Microsoft.Win32.OpenFileDialog dlg = new Microsoft.Win32.OpenFileDialog();
-            dlg.Filter = "Imágenes (*.jpg;*.jpeg;*.png;*.bmp)|*.jpg;*.jpeg;*.png;*.bmp";
-            if (dlg.ShowDialog() == true)
+            _pendingWallpaperPath = filePath;
+            if (_wallpaperDebounceTimer == null)
             {
-                try
+                _wallpaperDebounceTimer = new DispatcherTimer();
+                _wallpaperDebounceTimer.Interval = TimeSpan.FromMilliseconds(150); // 150ms debounce
+                _wallpaperDebounceTimer.Tick += (s, e) =>
                 {
-                    SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, dlg.FileName, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Error al establecer fondo: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                    _wallpaperDebounceTimer.Stop();
+                    if (!string.IsNullOrEmpty(_pendingWallpaperPath))
+                    {
+                        SetWallpaper(_pendingWallpaperPath);
+                    }
+                };
             }
+            _wallpaperDebounceTimer.Stop();
+            _wallpaperDebounceTimer.Start();
         }
 
-        private void SetPresetWallpaper(string name, System.Drawing.Color color1, System.Drawing.Color color2)
+        private void SetWallpaper(string filePath)
         {
             try
             {
-                int width = (int)SystemParameters.PrimaryScreenWidth;
-                int height = (int)SystemParameters.PrimaryScreenHeight;
-
-                using (Bitmap bmp = new Bitmap(width, height))
-                {
-                    using (Graphics g = Graphics.FromImage(bmp))
-                    {
-                        using (System.Drawing.Drawing2D.LinearGradientBrush brush = new System.Drawing.Drawing2D.LinearGradientBrush(
-                            new System.Drawing.Rectangle(0, 0, width, height),
-                            color1,
-                            color2,
-                            45f)) // Beautiful 45 deg gradient angle
-                        {
-                            g.FillRectangle(brush, 0, 0, width, height);
-                        }
-                    }
-
-                    string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "widgUI");
-                    if (!Directory.Exists(dir))
-                    {
-                        Directory.CreateDirectory(dir);
-                    }
-                    string filePath = Path.Combine(dir, name + ".png");
-                    bmp.Save(filePath, ImageFormat.Png);
-
-                    SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, filePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-                }
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, filePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error al autogenerar fondo: " + ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Diagnostics.Debug.WriteLine("Error setting wallpaper: " + ex.Message);
             }
         }
         #endregion
@@ -756,47 +996,84 @@ namespace WidgUI
         {
             if (_activeSubPanel == panelName)
             {
-                // Collapse subpanel, back to main menu (width 62)
-                AnimateWindowWidth(62);
-                _subPanelBorder.Visibility = Visibility.Collapsed;
-                HideAllSubPanels();
-                _activeSubPanel = null;
+                GoBackToMainMenu();
                 return;
             }
 
             _activeSubPanel = panelName;
-            HideAllSubPanels();
 
-            if (panelName == "style")
+            // 1. Hide main menu grid with animation
+            DoubleAnimation fadeOutMain = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(150));
+            fadeOutMain.Completed += (s, e) =>
             {
-                _stylePanel.Visibility = Visibility.Visible;
-                UpdateStylePanelSelections();
-                _stylePanel.Opacity = 0;
-                _stylePanel.BeginAnimation(Grid.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
-            }
-            else if (panelName == "settings")
-            {
-                _settingsPanel.Visibility = Visibility.Visible;
-                UpdateSettingsPanelSelections();
-                _settingsPanel.Opacity = 0;
-                _settingsPanel.BeginAnimation(Grid.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
-            }
-            else if (panelName == "wallpaper")
-            {
-                _wallpaperPanel.Visibility = Visibility.Visible;
-                _wallpaperPanel.Opacity = 0;
-                _wallpaperPanel.BeginAnimation(Grid.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
-            }
+                _mainMenuGrid.Visibility = Visibility.Collapsed;
 
-            _subPanelBorder.Visibility = Visibility.Visible;
-            AnimateWindowWidth(262);
+                // 2. Setup the subpanel to be shown
+                _stylePanel.Visibility = Visibility.Collapsed;
+                _settingsPanel.Visibility = Visibility.Collapsed;
+                _wallpaperPanel.Visibility = Visibility.Collapsed;
+
+                if (panelName == "style")
+                {
+                    _subPanelTitle.Text = "ESTILO DEL RELOJ";
+                    _stylePanel.Visibility = Visibility.Visible;
+                    UpdateStylePanelSelections();
+                }
+                else if (panelName == "settings")
+                {
+                    _subPanelTitle.Text = "AJUSTES WIDGET";
+                    _settingsPanel.Visibility = Visibility.Visible;
+                    UpdateSettingsPanelSelections();
+                }
+                else if (panelName == "wallpaper")
+                {
+                    _subPanelTitle.Text = "FONDO DE ESCRITORIO";
+                    _wallpaperPanel.Visibility = Visibility.Visible;
+                    LoadWallpaperPanelContent();
+                }
+
+                // 3. Make subpanel container visible but transparent
+                _subPanelContainer.Visibility = Visibility.Visible;
+                _subPanelContainer.Opacity = 0;
+
+                // 4. Animate window width to 220
+                AnimateWindowWidth(220);
+
+                // 5. Fade in the subpanel content
+                DoubleAnimation fadeInSub = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
+                {
+                    BeginTime = TimeSpan.FromMilliseconds(100) // slight delay for smooth width expansion
+                };
+                _subPanelContainer.BeginAnimation(Grid.OpacityProperty, fadeInSub);
+            };
+            _mainMenuGrid.BeginAnimation(Grid.OpacityProperty, fadeOutMain);
         }
 
-        private void HideAllSubPanels()
+        private void GoBackToMainMenu()
         {
-            _stylePanel.Visibility = Visibility.Collapsed;
-            _settingsPanel.Visibility = Visibility.Collapsed;
-            _wallpaperPanel.Visibility = Visibility.Collapsed;
+            _activeSubPanel = null;
+
+            // 1. Fade out subpanel container
+            DoubleAnimation fadeOutSub = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(150));
+            fadeOutSub.Completed += (s, e) =>
+            {
+                _subPanelContainer.Visibility = Visibility.Collapsed;
+
+                // 2. Make main menu visible but transparent
+                _mainMenuGrid.Visibility = Visibility.Visible;
+                _mainMenuGrid.Opacity = 0;
+
+                // 3. Animate window width back to 62
+                AnimateWindowWidth(62);
+
+                // 4. Fade in main menu
+                DoubleAnimation fadeInMain = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
+                {
+                    BeginTime = TimeSpan.FromMilliseconds(100)
+                };
+                _mainMenuGrid.BeginAnimation(Grid.OpacityProperty, fadeInMain);
+            };
+            _subPanelContainer.BeginAnimation(Grid.OpacityProperty, fadeOutSub);
         }
 
         private void AnimateWindowWidth(double targetWidth)
@@ -821,9 +1098,12 @@ namespace WidgUI
             AnimateWindowWidth(62);
 
             _collapsedIndicator.Visibility = Visibility.Collapsed;
-            _layoutGrid.Visibility = Visibility.Visible;
+            _menuBorder.Visibility = Visibility.Visible;
             
             // Show App Name first
+            _mainMenuGrid.Visibility = Visibility.Visible;
+            _mainMenuGrid.Opacity = 1;
+            
             _appNameText.Visibility = Visibility.Visible;
             _appNameText.Opacity = 0;
             _appNameText.BeginAnimation(TextBlock.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
@@ -831,6 +1111,10 @@ namespace WidgUI
             // Hide buttons first
             _buttonsGrid.Visibility = Visibility.Collapsed;
             _buttonsGrid.Opacity = 0;
+
+            // Hide subpanels if they were left open (safeguard)
+            _subPanelContainer.Visibility = Visibility.Collapsed;
+            _activeSubPanel = null;
 
             // Wait 750ms before switching to buttons
             _hoverTimer.Start();
@@ -843,15 +1127,15 @@ namespace WidgUI
 
             // Reset subpanels state
             _activeSubPanel = null;
-            _subPanelBorder.Visibility = Visibility.Collapsed;
-            HideAllSubPanels();
+            _subPanelContainer.Visibility = Visibility.Collapsed;
+            _mainMenuGrid.Visibility = Visibility.Collapsed;
 
             // Animate width back to collapsed 3px
             AnimateWindowWidth(3);
 
-            // Re-show collapsed indicator, hide layout grid
+            // Re-show collapsed indicator, hide border
             _collapsedIndicator.Visibility = Visibility.Visible;
-            _layoutGrid.Visibility = Visibility.Collapsed;
+            _menuBorder.Visibility = Visibility.Collapsed;
         }
 
         private void HoverTimer_Tick(object sender, EventArgs e)
