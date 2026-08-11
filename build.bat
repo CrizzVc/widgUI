@@ -1,6 +1,9 @@
 @echo off
 echo Compilando widgUI...
 
+:: Cierra la instancia previa si esta ejecutandose para liberar el archivo .exe
+taskkill /F /IM widgUI.exe >nul 2>&1
+
 set CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 set WPF_DIR=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF
 

@@ -11,15 +11,15 @@ namespace WidgUI
 {
     public class MainWindow : Window
     {
-        private TextBlock _timeText;
-        private TextBlock _amPmText;
+        private TextBlock _hoursText;
+        private TextBlock _minutesText;
         private TextBlock _dateText;
-        private TextBlock _greetingText;
+        private TextBlock _amPmText;
         private Border _cardBorder;
         private DispatcherTimer _timer;
 
-        private bool _is24HourFormat = false;
-        private bool _showSeconds = true;
+        private bool _is24HourFormat = true;
+        private bool _showDate = false; // Fecha opcional (desactivada por defecto)
         private bool _isLocked = false;
         private bool _embeddedInDesktop = true;
 
@@ -29,15 +29,15 @@ namespace WidgUI
             BuildUI();
             SetupTimer();
             SetupContextMenu();
-            
+
             this.Loaded += MainWindow_Loaded;
         }
 
         private void InitializeWindow()
         {
-            this.Title = "widgUI - Clock Widget";
-            this.Width = 340;
-            this.Height = 160;
+            this.Title = "widgUI - Reloj Vertical Transparente";
+            this.Width = 160;
+            this.Height = 220;
             this.WindowStyle = WindowStyle.None;
             this.AllowsTransparency = true;
             this.Background = Brushes.Transparent;
@@ -45,12 +45,12 @@ namespace WidgUI
             this.ShowInTaskbar = false;
             this.ResizeMode = ResizeMode.NoResize;
 
-            // Default position top right
+            // Default position top right of primary monitor
             double screenWidth = SystemParameters.PrimaryScreenWidth;
-            this.Left = screenWidth - this.Width - 40;
-            this.Top = 50;
+            this.Left = screenWidth - this.Width - 50;
+            this.Top = 60;
 
-            // Enable dragging
+            // Allow dragging anywhere on the clock
             this.MouseLeftButtonDown += (s, e) =>
             {
                 if (!_isLocked && e.ButtonState == MouseButtonState.Pressed)
@@ -68,117 +68,100 @@ namespace WidgUI
             }
         }
 
+        private DropShadowEffect CreateTextShadow()
+        {
+            return new DropShadowEffect
+            {
+                Color = (Color)ColorConverter.ConvertFromString("#180B28"),
+                Direction = 270,
+                ShadowDepth = 4,
+                Opacity = 0.9,
+                BlurRadius = 12
+            };
+        }
+
         private void BuildUI()
         {
-            // Outer container border with Fluent Glassmorphism effect
+            // Invisible background container with #01000000 so mouse drag and right click work 100%
             _cardBorder = new Border
             {
-                CornerRadius = new CornerRadius(20),
-                Margin = new Thickness(10),
-                Padding = new Thickness(20, 16, 20, 16),
-                Background = new LinearGradientBrush
-                {
-                    StartPoint = new Point(0, 0),
-                    EndPoint = new Point(1, 1),
-                    GradientStops = new GradientStopCollection
-                    {
-                        new GradientStop((Color)ColorConverter.ConvertFromString("#E6181926"), 0.0), // Deep Dark Glass
-                        new GradientStop((Color)ColorConverter.ConvertFromString("#CC24273A"), 1.0)
-                    }
-                },
-                BorderBrush = new LinearGradientBrush
-                {
-                    StartPoint = new Point(0, 0),
-                    EndPoint = new Point(1, 1),
-                    GradientStops = new GradientStopCollection
-                    {
-                        new GradientStop((Color)ColorConverter.ConvertFromString("#80FFFFFF"), 0.0),
-                        new GradientStop((Color)ColorConverter.ConvertFromString("#20808080"), 1.0)
-                    }
-                },
-                BorderThickness = new Thickness(1.2),
-                Effect = new DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    Direction = 270,
-                    ShadowDepth = 8,
-                    Opacity = 0.45,
-                    BlurRadius = 20
-                }
+                Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)),
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(4)
             };
 
-            // Main vertical layout
-            StackPanel mainLayout = new StackPanel
+            StackPanel mainStack = new StackPanel
             {
                 Orientation = Orientation.Vertical,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            // Top Greeting Header
-            _greetingText = new TextBlock
-            {
-                Text = "BUENAS TARDES",
-                FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif"),
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CAD3F5")),
-                Opacity = 0.7,
-                Margin = new Thickness(2, 0, 0, 4)
-            };
+            FontFamily boldFont = new FontFamily("Segoe UI, Arial");
 
-            // Clock Row Layout (Time + AM/PM)
-            StackPanel timeRow = new StackPanel
+            // Hours Text (Top line)
+            _hoursText = new TextBlock
             {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            _timeText = new TextBlock
-            {
-                Text = "00:00:00",
-                FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI, Arial"),
-                FontSize = 42,
+                Text = "23",
+                FontFamily = boldFont,
+                FontSize = 76,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
-                Effect = new DropShadowEffect
-                {
-                    Color = (Color)ColorConverter.ConvertFromString("#8B5CF6"), // Subtle purple glow
-                    BlurRadius = 12,
-                    ShadowDepth = 0,
-                    Opacity = 0.5
-                }
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, -8, 0, -10),
+                Effect = CreateTextShadow()
             };
 
+            // Minutes Text (Bottom line)
+            _minutesText = new TextBlock
+            {
+                Text = "28",
+                FontFamily = boldFont,
+                FontSize = 76,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, -10, 0, 2),
+                Effect = CreateTextShadow()
+            };
+
+            // AM/PM Indicator (For 12h mode)
             _amPmText = new TextBlock
             {
-                Text = "PM",
-                FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif"),
-                FontSize = 14,
+                Text = "",
+                FontFamily = boldFont,
+                FontSize = 11,
                 FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5A97F")), // Peach accent
-                Margin = new Thickness(8, 6, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center
+                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F472B6")),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Visibility = Visibility.Collapsed,
+                Effect = CreateTextShadow()
             };
 
-            timeRow.Children.Add(_timeText);
-            timeRow.Children.Add(_amPmText);
-
-            // Date Footer Line
+            // Optional Date Text
             _dateText = new TextBlock
             {
-                Text = "Cargando fecha...",
-                FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif"),
-                FontSize = 12,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#B8C0E0")),
-                Margin = new Thickness(2, 4, 0, 0)
+                Text = "",
+                FontFamily = boldFont,
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Opacity = 0.9,
+                Margin = new Thickness(0, 4, 0, 0),
+                Visibility = Visibility.Collapsed,
+                Effect = CreateTextShadow()
             };
 
-            mainLayout.Children.Add(_greetingText);
-            mainLayout.Children.Add(timeRow);
-            mainLayout.Children.Add(_dateText);
+            mainStack.Children.Add(_hoursText);
+            mainStack.Children.Add(_minutesText);
+            mainStack.Children.Add(_amPmText);
+            mainStack.Children.Add(_dateText);
 
-            _cardBorder.Child = mainLayout;
+            _cardBorder.Child = mainStack;
             this.Content = _cardBorder;
         }
 
@@ -197,32 +180,32 @@ namespace WidgUI
         {
             DateTime now = DateTime.Now;
 
-            // Format time
-            string format = _is24HourFormat
-                ? (_showSeconds ? "HH:mm:ss" : "HH:mm")
-                : (_showSeconds ? "hh:mm:ss" : "hh:mm");
-
-            _timeText.Text = now.ToString(format);
-            _amPmText.Text = _is24HourFormat ? "" : now.ToString("tt", CultureInfo.InvariantCulture).ToUpper();
-
-            // Format Date in Spanish
-            CultureInfo ci = new CultureInfo("es-ES");
-            string dateStr = now.ToString("dddd, d 'de' MMMM", ci);
-            // Capitalize first letter of day
-            if (dateStr.Length > 0)
+            if (_is24HourFormat)
             {
-                dateStr = char.ToUpper(dateStr[0]) + dateStr.Substring(1);
+                _hoursText.Text = now.ToString("HH");
+                _amPmText.Visibility = Visibility.Collapsed;
             }
-            _dateText.Text = dateStr;
-
-            // Update Greeting based on hour
-            int hour = now.Hour;
-            if (hour >= 6 && hour < 12)
-                _greetingText.Text = "¡BUENOS DÍAS!";
-            else if (hour >= 12 && hour < 20)
-                _greetingText.Text = "¡BUENAS TARDES!";
             else
-                _greetingText.Text = "¡BUENAS NOCHES!";
+            {
+                _hoursText.Text = now.ToString("hh");
+                _amPmText.Text = now.ToString("tt", CultureInfo.InvariantCulture).ToUpper();
+                _amPmText.Visibility = Visibility.Visible;
+            }
+
+            _minutesText.Text = now.ToString("mm");
+
+            if (_showDate)
+            {
+                CultureInfo ci = new CultureInfo("es-ES");
+                string dayName = now.ToString("ddd", ci).ToUpper().Replace(".", "");
+                string monthName = now.ToString("MMM", ci).ToUpper().Replace(".", "");
+                _dateText.Text = string.Format("{0} {1} {2}", dayName, now.Day, monthName);
+                _dateText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                _dateText.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void SetupContextMenu()
@@ -238,12 +221,12 @@ namespace WidgUI
                 UpdateTimeDisplay();
             };
 
-            MenuItem itemSeconds = new MenuItem { Header = "Mostrar Segundos" };
-            itemSeconds.IsCheckable = true;
-            itemSeconds.IsChecked = _showSeconds;
-            itemSeconds.Click += (s, e) =>
+            MenuItem itemDate = new MenuItem { Header = "Mostrar Fecha" };
+            itemDate.IsCheckable = true;
+            itemDate.IsChecked = _showDate;
+            itemDate.Click += (s, e) =>
             {
-                _showSeconds = itemSeconds.IsChecked;
+                _showDate = itemDate.IsChecked;
                 UpdateTimeDisplay();
             };
 
@@ -262,7 +245,7 @@ namespace WidgUI
             };
 
             cm.Items.Add(itemFormat);
-            cm.Items.Add(itemSeconds);
+            cm.Items.Add(itemDate);
             cm.Items.Add(itemLock);
             cm.Items.Add(new Separator());
             cm.Items.Add(itemExit);
