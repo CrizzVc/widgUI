@@ -111,7 +111,11 @@ namespace WidgUI
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
                 e.Effects = DragDropEffects.Copy;
-                if (_dropOverlay != null) _dropOverlay.Visibility = Visibility.Visible;
+                if (_dropOverlay != null)
+                {
+                    _dropOverlay.Visibility = Visibility.Visible;
+                    if (_iconsGrid != null) _iconsGrid.Visibility = Visibility.Collapsed;
+                }
             }
             else
             {
@@ -121,12 +125,20 @@ namespace WidgUI
 
         private void FolderWidgetWindow_DragLeave(object sender, DragEventArgs e)
         {
-            if (_dropOverlay != null) _dropOverlay.Visibility = Visibility.Collapsed;
+            if (_dropOverlay != null)
+            {
+                _dropOverlay.Visibility = Visibility.Collapsed;
+                if (_iconsGrid != null) _iconsGrid.Visibility = Visibility.Visible;
+            }
         }
 
         private void FolderWidgetWindow_Drop(object sender, DragEventArgs e)
         {
-            if (_dropOverlay != null) _dropOverlay.Visibility = Visibility.Collapsed;
+            if (_dropOverlay != null)
+            {
+                _dropOverlay.Visibility = Visibility.Collapsed;
+                if (_iconsGrid != null) _iconsGrid.Visibility = Visibility.Visible;
+            }
 
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
@@ -178,14 +190,14 @@ namespace WidgUI
 
             _dropOverlay = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(140, 240, 245, 255)),
+                Background = Brushes.Transparent,
                 CornerRadius = new CornerRadius(30),
                 Visibility = Visibility.Collapsed
             };
             TextBlock dropText = new TextBlock
             {
                 Text = "Suelta aquí",
-                Foreground = Brushes.DarkSlateGray,
+                Foreground = Brushes.White,
                 FontSize = 18,
                 FontWeight = FontWeights.Bold,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -232,8 +244,9 @@ namespace WidgUI
                 WindowStyle = WindowStyle.None,
                 AllowsTransparency = true,
                 Background = Brushes.Transparent,
-                Topmost = true,
+                Topmost = false,
                 ShowInTaskbar = false,
+                ShowActivated = false,
                 Left = 0,
                 Top = 0,
                 Width = SystemParameters.PrimaryScreenWidth,
@@ -371,34 +384,9 @@ namespace WidgUI
                 RenderShortcuts();
                 PrepareIconsForStaggeredEntrance();
                 
-                // Make window cover all screens to avoid clipping during smooth WPF render transform animation
-                double virtLeft = SystemParameters.VirtualScreenLeft;
-                double virtTop = SystemParameters.VirtualScreenTop;
-                this.Left = virtLeft;
-                this.Top = virtTop;
-                this.Width = SystemParameters.VirtualScreenWidth;
-                this.Height = SystemParameters.VirtualScreenHeight;
-                
-                // Setup _cardBorder for hardware-accelerated transform animation
-                _cardBorder.HorizontalAlignment = HorizontalAlignment.Left;
-                _cardBorder.VerticalAlignment = VerticalAlignment.Top;
-                _cardBorder.Width = COLLAPSED_WIDTH;
-                _cardBorder.Height = COLLAPSED_HEIGHT;
-                
-                double startX = _originalLeft - virtLeft;
-                double startY = _originalTop - virtTop;
-                double endX = targetLeft - virtLeft;
-                double endY = targetTop - virtTop;
-                
-                TranslateTransform trans = new TranslateTransform(startX, startY);
-                _cardBorder.RenderTransform = trans;
-                
-                // First show overlay, then bring folder to front
+                // Show overlay behind folder
                 this.Topmost = true;
                 ShowOverlay();
-                // Bring the folder ABOVE the overlay
-                this.Activate();
-                this.Focus();
                 
                 DoubleAnimation animW = new DoubleAnimation
                 {
@@ -410,15 +398,14 @@ namespace WidgUI
                     From = COLLAPSED_HEIGHT, To = targetHeight,
                     Duration = moveDuration, EasingFunction = moveEasing
                 };
-                
-                DoubleAnimation animX = new DoubleAnimation
+                DoubleAnimation animL = new DoubleAnimation
                 {
-                    From = startX, To = endX,
+                    From = _originalLeft, To = targetLeft,
                     Duration = moveDuration, EasingFunction = moveEasing
                 };
-                DoubleAnimation animY = new DoubleAnimation
+                DoubleAnimation animT = new DoubleAnimation
                 {
-                    From = startY, To = endY,
+                    From = _originalTop, To = targetTop,
                     Duration = moveDuration, EasingFunction = moveEasing
                 };
                 
@@ -429,32 +416,20 @@ namespace WidgUI
                 DropShadowEffect shadow = _cardBorder.Effect as DropShadowEffect;
                 if (shadow != null)
                 {
-                    DoubleAnimation shadowBlur = new DoubleAnimation
-                    {
-                        To = 50, Duration = moveDuration, EasingFunction = moveEasing
-                    };
-                    DoubleAnimation shadowOpacity = new DoubleAnimation
-                    {
-                        To = 0.35, Duration = moveDuration, EasingFunction = moveEasing
-                    };
-                    DoubleAnimation shadowDepth = new DoubleAnimation
-                    {
-                        To = 15, Duration = moveDuration, EasingFunction = moveEasing
-                    };
+                    DoubleAnimation shadowBlur = new DoubleAnimation { To = 50, Duration = moveDuration, EasingFunction = moveEasing };
+                    DoubleAnimation shadowOpacity = new DoubleAnimation { To = 0.35, Duration = moveDuration, EasingFunction = moveEasing };
+                    DoubleAnimation shadowDepth = new DoubleAnimation { To = 15, Duration = moveDuration, EasingFunction = moveEasing };
                     shadow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, shadowBlur);
                     shadow.BeginAnimation(DropShadowEffect.OpacityProperty, shadowOpacity);
                     shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty, shadowDepth);
                 }
                 
-                animW.Completed += (s, e) =>
-                {
-                    _isAnimating = false;
-                };
+                animW.Completed += (s, e) => { _isAnimating = false; };
                 
-                _cardBorder.BeginAnimation(FrameworkElement.WidthProperty, animW);
-                _cardBorder.BeginAnimation(FrameworkElement.HeightProperty, animH);
-                trans.BeginAnimation(TranslateTransform.XProperty, animX);
-                trans.BeginAnimation(TranslateTransform.YProperty, animY);
+                this.BeginAnimation(Window.WidthProperty, animW);
+                this.BeginAnimation(Window.HeightProperty, animH);
+                this.BeginAnimation(Window.LeftProperty, animL);
+                this.BeginAnimation(Window.TopProperty, animT);
                 
                 // Stagger icons in after a small delay (let container start growing first)
                 AnimateIconsStaggeredEntrance(true, TimeSpan.FromMilliseconds(120));
@@ -471,10 +446,8 @@ namespace WidgUI
                 // Delay the window collapse slightly so icons start fading first
                 TimeSpan collapseDelay = TimeSpan.FromMilliseconds(60);
                 
-                double virtLeft = SystemParameters.VirtualScreenLeft;
-                double virtTop = SystemParameters.VirtualScreenTop;
-                double targetX = _originalLeft - virtLeft;
-                double targetY = _originalTop - virtTop;
+                double targetX = _originalLeft;
+                double targetY = _originalTop;
                 
                 DoubleAnimation animW = new DoubleAnimation
                 {
@@ -504,18 +477,9 @@ namespace WidgUI
                 DropShadowEffect shadow = _cardBorder.Effect as DropShadowEffect;
                 if (shadow != null)
                 {
-                    DoubleAnimation shadowBlur = new DoubleAnimation
-                    {
-                        To = 15, Duration = collapseDuration, EasingFunction = collapseEasing
-                    };
-                    DoubleAnimation shadowOpacity = new DoubleAnimation
-                    {
-                        To = 0.2, Duration = collapseDuration, EasingFunction = collapseEasing
-                    };
-                    DoubleAnimation shadowDepth = new DoubleAnimation
-                    {
-                        To = 5, Duration = collapseDuration, EasingFunction = collapseEasing
-                    };
+                    DoubleAnimation shadowBlur = new DoubleAnimation { To = 15, Duration = collapseDuration, EasingFunction = collapseEasing };
+                    DoubleAnimation shadowOpacity = new DoubleAnimation { To = 0.2, Duration = collapseDuration, EasingFunction = collapseEasing };
+                    DoubleAnimation shadowDepth = new DoubleAnimation { To = 5, Duration = collapseDuration, EasingFunction = collapseEasing };
                     shadow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, shadowBlur);
                     shadow.BeginAnimation(DropShadowEffect.OpacityProperty, shadowOpacity);
                     shadow.BeginAnimation(DropShadowEffect.ShadowDepthProperty, shadowDepth);
@@ -523,24 +487,11 @@ namespace WidgUI
                 
                 animW.Completed += (s, e) =>
                 {
-                    // Clean up animations on _cardBorder
-                    _cardBorder.BeginAnimation(FrameworkElement.WidthProperty, null);
-                    _cardBorder.BeginAnimation(FrameworkElement.HeightProperty, null);
-                    TranslateTransform t = _cardBorder.RenderTransform as TranslateTransform;
-                    if (t != null)
-                    {
-                        t.BeginAnimation(TranslateTransform.XProperty, null);
-                        t.BeginAnimation(TranslateTransform.YProperty, null);
-                    }
-                    _cardBorder.RenderTransform = null;
+                    this.BeginAnimation(Window.WidthProperty, null);
+                    this.BeginAnimation(Window.HeightProperty, null);
+                    this.BeginAnimation(Window.LeftProperty, null);
+                    this.BeginAnimation(Window.TopProperty, null);
                     
-                    // Reset card border layout
-                    _cardBorder.Width = double.NaN;
-                    _cardBorder.Height = double.NaN;
-                    _cardBorder.HorizontalAlignment = HorizontalAlignment.Stretch;
-                    _cardBorder.VerticalAlignment = VerticalAlignment.Stretch;
-                    
-                    // Explicitly set window to original values
                     this.Width = COLLAPSED_WIDTH;
                     this.Height = COLLAPSED_HEIGHT;
                     this.Left = _originalLeft;
@@ -553,25 +504,14 @@ namespace WidgUI
                     
                     _isAnimating = false;
                     this.Topmost = false;
-                    
-                    // Re-embed in desktop
-                    if (_embeddedInDesktop)
-                    {
-                        DesktopManager.EmbedInDesktop(this);
-                    }
                 };
                 
-                // Hide overlay (animate simultaneously)
                 HideOverlay();
                 
-                TranslateTransform trans = _cardBorder.RenderTransform as TranslateTransform;
-                if (trans != null)
-                {
-                    _cardBorder.BeginAnimation(FrameworkElement.WidthProperty, animW);
-                    _cardBorder.BeginAnimation(FrameworkElement.HeightProperty, animH);
-                    trans.BeginAnimation(TranslateTransform.XProperty, animX);
-                    trans.BeginAnimation(TranslateTransform.YProperty, animY);
-                }
+                this.BeginAnimation(Window.WidthProperty, animW);
+                this.BeginAnimation(Window.HeightProperty, animH);
+                this.BeginAnimation(Window.LeftProperty, animX);
+                this.BeginAnimation(Window.TopProperty, animY);
             }
         }
         
@@ -729,7 +669,7 @@ namespace WidgUI
             
             // Determine sizes based on expanded state
             double itemSize = _isExpanded ? 60 : 46;
-            double iconSize = _isExpanded ? 32 : 24;
+            double iconSize = itemSize;
             double itemMargin = _isExpanded ? 6 : 4;
             double cornerRadius = _isExpanded ? 18 : 14;
             double fontSize = _isExpanded ? 22 : 18;
