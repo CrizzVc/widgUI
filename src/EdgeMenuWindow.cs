@@ -137,8 +137,8 @@ namespace WidgUI
             this.ResizeMode = ResizeMode.NoResize;
             this.ShowActivated = false;
 
-            this.Width = 3; // Collapsed starting width is just a line!
-            this.Height = 200;
+            this.Width = 320; // Max expanded width
+            this.Height = 480; // Max expanded height
             this.Left = 0;
             
             // Store center for symmetric expansion
@@ -165,17 +165,18 @@ namespace WidgUI
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
-                Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)) // Transparent but hit-testable
+                Background = Brushes.Transparent // Let clicks pass through transparent areas
             };
 
             // 1. Collapsed Indicator (glowing thin 3px line)
             _collapsedIndicator = new Border
             {
                 Width = 3,
+                Height = 120, // Revert to initial tiny height
                 Background = new SolidColorBrush(Color.FromArgb(180, 56, 189, 248)), // Glowing sky blue line
                 CornerRadius = new CornerRadius(1.5),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Stretch, // Stretch to match window height
+                VerticalAlignment = VerticalAlignment.Center, // Revert to center anchor
                 Visibility = Visibility.Visible
             };
             rootGrid.Children.Add(_collapsedIndicator);
@@ -183,8 +184,11 @@ namespace WidgUI
             // 2. Unified Menu Border (Stretches with Window)
             _menuBorder = new Border
             {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Left, // Anchor left
+                VerticalAlignment = VerticalAlignment.Center, // Anchor center
+                Width = 3,
+                Height = 120,
+                ClipToBounds = true,
                 Background = new SolidColorBrush(Color.FromRgb(32, 32, 32)), // #202020
                 BorderBrush = new SolidColorBrush(Color.FromArgb(120, 56, 189, 248)), // Celeste glow
                 BorderThickness = new Thickness(0, 1.5, 1.5, 1.5), // No border on left side
@@ -1180,21 +1184,21 @@ namespace WidgUI
                     _subPanelTitle.Text = "ESTILO DEL RELOJ";
                     _stylePanel.Visibility = Visibility.Visible;
                     UpdateStylePanelSelections();
-                    AnimateWindowSize(220, 200);
+                    AnimateMenuSize(220, 200);
                 }
                 else if (panelName == "settings")
                 {
                     _subPanelTitle.Text = "AJUSTES WIDGET";
                     _settingsPanel.Visibility = Visibility.Visible;
                     UpdateSettingsPanelSelections();
-                    AnimateWindowSize(220, 200);
+                    AnimateMenuSize(220, 200);
                 }
                 else if (panelName == "wallpaper")
                 {
                     _subPanelTitle.Text = "FONDO DE ESCRITORIO";
                     _wallpaperPanel.Visibility = Visibility.Visible;
                     LoadWallpaperPanelContent();
-                    AnimateWindowSize(320, 480);
+                    AnimateMenuSize(320, 480);
                 }
 
                 // 3. Make subpanel container visible but transparent
@@ -1226,7 +1230,7 @@ namespace WidgUI
                 _mainMenuGrid.Opacity = 0;
 
                 // 3. Animate back to main menu size
-                AnimateWindowSize(62, 200);
+                AnimateMenuSize(62, 200);
 
                 // 4. Fade in main menu
                 DoubleAnimation fadeInMain = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
@@ -1238,7 +1242,7 @@ namespace WidgUI
             _subPanelContainer.BeginAnimation(Grid.OpacityProperty, fadeOutSub);
         }
 
-        private void AnimateWindowSize(double targetWidth, double targetHeight)
+        private void AnimateMenuSize(double targetWidth, double targetHeight)
         {
             TimeSpan dur = TimeSpan.FromMilliseconds(300);
             double decel = 0.85;
@@ -1249,7 +1253,7 @@ namespace WidgUI
                 Duration = dur,
                 DecelerationRatio = decel
             };
-            this.BeginAnimation(Window.WidthProperty, widthAnim);
+            _menuBorder.BeginAnimation(Border.WidthProperty, widthAnim);
 
             DoubleAnimation heightAnim = new DoubleAnimation
             {
@@ -1257,17 +1261,7 @@ namespace WidgUI
                 Duration = dur,
                 DecelerationRatio = decel
             };
-            this.BeginAnimation(Window.HeightProperty, heightAnim);
-
-            // Animate Top to keep centered vertically
-            double targetTop = _screenCenterY - (targetHeight / 2);
-            DoubleAnimation topAnim = new DoubleAnimation
-            {
-                To = targetTop,
-                Duration = dur,
-                DecelerationRatio = decel
-            };
-            this.BeginAnimation(Window.TopProperty, topAnim);
+            _menuBorder.BeginAnimation(Border.HeightProperty, heightAnim);
         }
         #endregion
 
@@ -1281,13 +1275,12 @@ namespace WidgUI
             _hoverTimer.Stop();
 
             // Expands immediately to main size (62x200)
-            AnimateWindowSize(62, 200);
+            AnimateMenuSize(62, 200);
 
             _collapsedIndicator.Visibility = Visibility.Collapsed;
             _menuBorder.Visibility = Visibility.Visible;
-
-            // Fade in the menu border
-            _menuBorder.BeginAnimation(Border.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+            _menuBorder.Opacity = 1;
+            _menuBorder.BeginAnimation(Border.OpacityProperty, null);
             
             // Show App Name first
             _mainMenuGrid.Visibility = Visibility.Visible;
@@ -1335,14 +1328,13 @@ namespace WidgUI
             {
                 _menuBorder.Visibility = Visibility.Collapsed;
                 _collapsedIndicator.Visibility = Visibility.Visible;
-                // Fade in collapsed indicator
-                _collapsedIndicator.Opacity = 0;
-                _collapsedIndicator.BeginAnimation(Border.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300)));
+                _collapsedIndicator.Opacity = 1;
+                _collapsedIndicator.BeginAnimation(Border.OpacityProperty, null);
             };
             _menuBorder.BeginAnimation(Border.OpacityProperty, fadeOut);
 
             // Animate back to collapsed size
-            AnimateWindowSize(3, 200);
+            AnimateMenuSize(3, 120);
         }
 
         private void HoverTimer_Tick(object sender, EventArgs e)
