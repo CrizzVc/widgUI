@@ -126,7 +126,7 @@ namespace WidgUI
             {
                 _dragStarted = true;
                 _iconTile.ReleaseMouseCapture();
-                DragMove();
+                WidgetSnapHelper.BeginSnapDrag(this, e);
             }
         }
 

@@ -125,7 +125,7 @@ namespace WidgUI
 
                 if (e.ButtonState == MouseButtonState.Pressed)
                 {
-                    this.DragMove();
+                    WidgetSnapHelper.BeginSnapDrag(this, e);
                 }
             };
         }

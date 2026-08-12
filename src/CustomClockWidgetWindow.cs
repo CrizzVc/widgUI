@@ -100,7 +100,7 @@ namespace WidgUI
                 if (!_isLocked && !_isResizing && !IsInteractiveTarget(e.OriginalSource as DependencyObject)
                     && e.ButtonState == MouseButtonState.Pressed)
                 {
-                    this.DragMove();
+                    WidgetSnapHelper.BeginSnapDrag(this, e);
                 }
             };
         }

@@ -191,6 +191,85 @@ namespace WidgUI
             return _edgeMenu != null ? _edgeMenu.ActiveWallpaperPath : null;
         }
 
+        public static IEnumerable<Rect> GetWidgetBoundsExcept(Window exclude)
+        {
+            if (_clock != null && _clock != exclude && _clock.IsVisible)
+            {
+                yield return GetWindowBounds(_clock);
+            }
+
+            foreach (FolderWidgetWindow widget in _folderWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+
+            foreach (ImageWidgetWindow widget in _imageWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+
+            foreach (MusicWidgetWindow widget in _musicWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+
+            foreach (DockWidgetWindow widget in _dockWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+
+            foreach (CustomClockWidgetWindow widget in _customClockWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+
+            foreach (AppWidgetWindow widget in _appWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+
+            foreach (ExpandedFolderWidgetWindow widget in _expandedFolderWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+
+            foreach (CalendarWidgetWindow widget in _calendarWidgets)
+            {
+                if (widget != exclude && widget.IsVisible)
+                {
+                    yield return GetWindowBounds(widget);
+                }
+            }
+        }
+
+        private static Rect GetWindowBounds(Window window)
+        {
+            double width = window.ActualWidth > 0 ? window.ActualWidth : window.Width;
+            double height = window.ActualHeight > 0 ? window.ActualHeight : window.Height;
+            return new Rect(window.Left, window.Top, width, height);
+        }
+
         public static void AutoSaveLayout()
         {
             try

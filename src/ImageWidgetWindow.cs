@@ -160,7 +160,7 @@ namespace WidgUI
             if (e.ButtonState == MouseButtonState.Pressed)
             {
                 ShowChrome();
-                this.DragMove();
+                WidgetSnapHelper.BeginSnapDrag(this, e);
                 StartIdleTimer();
             }
         }
