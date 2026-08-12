@@ -1731,7 +1731,11 @@ namespace WidgUI
                 WidgetRegistry.OpenExpandedFolderWidget();
                 return false;
             }));
-            grid.Children.Add(CreateWidgetItem("Calendario", "\uE787", false, null));
+            grid.Children.Add(CreateWidgetItem("Calendario", "\uE787", false, () =>
+            {
+                WidgetRegistry.OpenCalendarWidget();
+                return false;
+            }));
 
             scrollViewer.Content = grid;
             _widgetsPanel.Children.Add(scrollViewer);

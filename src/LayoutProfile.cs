@@ -43,6 +43,9 @@ namespace WidgUI
         [DataMember(Name = "expandedFolderWidgets")]
         public List<ExpandedFolderWidgetLayoutData> ExpandedFolderWidgets { get; set; }
 
+        [DataMember(Name = "calendarWidgets")]
+        public List<CalendarWidgetLayoutData> CalendarWidgets { get; set; }
+
         public LayoutProfile()
         {
             Version = 1;
@@ -53,6 +56,7 @@ namespace WidgUI
             CustomClockWidgets = new List<CustomClockWidgetLayoutData>();
             AppWidgets = new List<AppWidgetLayoutData>();
             ExpandedFolderWidgets = new List<ExpandedFolderWidgetLayoutData>();
+            CalendarWidgets = new List<CalendarWidgetLayoutData>();
         }
     }
 
@@ -345,6 +349,36 @@ namespace WidgUI
         public ExpandedFolderWidgetLayoutData()
         {
             Shortcuts = new List<string>();
+            Opacity = WidgetAppearanceHelper.DefaultOpacity;
+        }
+    }
+
+    [DataContract]
+    public class CalendarWidgetLayoutData
+    {
+        [DataMember(Name = "id")]
+        public string Id { get; set; }
+
+        [DataMember(Name = "isLocked")]
+        public bool IsLocked { get; set; }
+
+        [DataMember(Name = "left")]
+        public double Left { get; set; }
+
+        [DataMember(Name = "top")]
+        public double Top { get; set; }
+
+        [DataMember(Name = "themeMode")]
+        public int ThemeMode { get; set; }
+
+        [DataMember(Name = "adaptToBackground")]
+        public bool AdaptToBackground { get; set; }
+
+        [DataMember(Name = "opacity")]
+        public double Opacity { get; set; }
+
+        public CalendarWidgetLayoutData()
+        {
             Opacity = WidgetAppearanceHelper.DefaultOpacity;
         }
     }

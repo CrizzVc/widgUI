@@ -17,6 +17,7 @@ namespace WidgUI
         private static readonly List<CustomClockWidgetWindow> _customClockWidgets = new List<CustomClockWidgetWindow>();
         private static readonly List<AppWidgetWindow> _appWidgets = new List<AppWidgetWindow>();
         private static readonly List<ExpandedFolderWidgetWindow> _expandedFolderWidgets = new List<ExpandedFolderWidgetWindow>();
+        private static readonly List<CalendarWidgetWindow> _calendarWidgets = new List<CalendarWidgetWindow>();
 
         public static void Initialize(MainWindow clock, EdgeMenuWindow edgeMenu)
         {
@@ -50,6 +51,7 @@ namespace WidgUI
             stack.AddRange(_customClockWidgets);
             stack.AddRange(_appWidgets);
             stack.AddRange(_expandedFolderWidgets);
+            stack.AddRange(_calendarWidgets);
             stack.Add(_edgeMenu);
 
             DesktopManager.StackWindows(stack);
@@ -68,7 +70,8 @@ namespace WidgUI
                 DockWidgets = _dockWidgets.Select(w => w.ToLayoutData()).ToList(),
                 CustomClockWidgets = _customClockWidgets.Select(w => w.ToLayoutData()).ToList(),
                 AppWidgets = _appWidgets.Select(w => w.ToLayoutData()).ToList(),
-                ExpandedFolderWidgets = _expandedFolderWidgets.Select(w => w.ToLayoutData()).ToList()
+                ExpandedFolderWidgets = _expandedFolderWidgets.Select(w => w.ToLayoutData()).ToList(),
+                CalendarWidgets = _calendarWidgets.Select(w => w.ToLayoutData()).ToList()
             };
 
             return profile;
@@ -146,6 +149,14 @@ namespace WidgUI
                 foreach (ExpandedFolderWidgetLayoutData data in profile.ExpandedFolderWidgets)
                 {
                     OpenExpandedFolderWidget(data);
+                }
+            }
+
+            if (profile.CalendarWidgets != null)
+            {
+                foreach (CalendarWidgetLayoutData data in profile.CalendarWidgets)
+                {
+                    OpenCalendarWidget(data);
                 }
             }
 
@@ -282,6 +293,17 @@ namespace WidgUI
             return widget;
         }
 
+        public static CalendarWidgetWindow OpenCalendarWidget(CalendarWidgetLayoutData data = null)
+        {
+            CalendarWidgetWindow widget = data != null
+                ? new CalendarWidgetWindow(data)
+                : new CalendarWidgetWindow();
+
+            RegisterCalendarWidget(widget);
+            widget.Show();
+            return widget;
+        }
+
         public static void RegisterFolderWidget(FolderWidgetWindow widget)
         {
             if (widget == null || _folderWidgets.Contains(widget))
@@ -363,6 +385,18 @@ namespace WidgUI
 
             _expandedFolderWidgets.Add(widget);
             widget.Closed += ExpandedFolderWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
+        }
+
+        public static void RegisterCalendarWidget(CalendarWidgetWindow widget)
+        {
+            if (widget == null || _calendarWidgets.Contains(widget))
+            {
+                return;
+            }
+
+            _calendarWidgets.Add(widget);
+            widget.Closed += CalendarWidget_Closed;
             widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
         }
 
@@ -455,6 +489,18 @@ namespace WidgUI
             _expandedFolderWidgets.Remove(widget);
         }
 
+        private static void CalendarWidget_Closed(object sender, EventArgs e)
+        {
+            CalendarWidgetWindow widget = sender as CalendarWidgetWindow;
+            if (widget == null)
+            {
+                return;
+            }
+
+            widget.Closed -= CalendarWidget_Closed;
+            _calendarWidgets.Remove(widget);
+        }
+
         private static void CloseSecondaryWidgets()
         {
             foreach (FolderWidgetWindow widget in _folderWidgets.ToList())
@@ -505,6 +551,13 @@ namespace WidgUI
                 widget.Close();
             }
             _expandedFolderWidgets.Clear();
+
+            foreach (CalendarWidgetWindow widget in _calendarWidgets.ToList())
+            {
+                widget.Closed -= CalendarWidget_Closed;
+                widget.Close();
+            }
+            _calendarWidgets.Clear();
         }
     }
 }
