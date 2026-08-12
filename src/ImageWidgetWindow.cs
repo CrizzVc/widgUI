@@ -56,7 +56,14 @@ namespace WidgUI
             _imagePath = layoutData.ImagePath;
             InitializeWindow();
             BuildUI();
-            LoadImage(_imagePath);
+
+            double decodeSize = DefaultMaxDimension;
+            if (layoutData.Width >= MinSize && layoutData.Height >= MinSize)
+            {
+                decodeSize = Math.Max(layoutData.Width, layoutData.Height);
+            }
+
+            LoadImage(_imagePath, decodeSize, applyInitialSize: layoutData.Width < MinSize || layoutData.Height < MinSize);
             SetupContextMenu();
             this.Loaded += ImageWidgetWindow_Loaded;
             ApplyLayoutData(layoutData);
@@ -391,6 +398,7 @@ namespace WidgUI
             _isResizing = false;
             _resizeHandle.ReleaseMouseCapture();
             _resizeHandle.Background = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255));
+            EnsureImageDecodeMatchesDisplaySize();
             StartIdleTimer();
         }
 
@@ -399,18 +407,117 @@ namespace WidgUI
             return Math.Max(MinSize, Math.Min(MaxSize, value));
         }
 
-        private void LoadImage(string imagePath)
+        private void LoadImage(string imagePath, double maxDecodeDimension = 0, bool applyInitialSize = true)
         {
+            string fullPath = Path.GetFullPath(imagePath);
+            int originalWidth;
+            int originalHeight;
+            if (!TryGetImageDimensions(fullPath, out originalWidth, out originalHeight))
+            {
+                originalWidth = 0;
+                originalHeight = 0;
+            }
+
+            if (maxDecodeDimension <= 0)
+            {
+                maxDecodeDimension = Math.Max(this.Width, this.Height);
+            }
+
+            if (maxDecodeDimension < DefaultMaxDimension)
+            {
+                maxDecodeDimension = DefaultMaxDimension;
+            }
+
+            maxDecodeDimension = Math.Min(MaxSize, maxDecodeDimension);
+
             BitmapImage bitmap = new BitmapImage();
             bitmap.BeginInit();
-            bitmap.UriSource = new Uri(Path.GetFullPath(imagePath));
+            bitmap.UriSource = new Uri(fullPath);
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            ApplyDecodeLimit(bitmap, originalWidth, originalHeight, maxDecodeDimension);
             bitmap.EndInit();
             bitmap.Freeze();
 
             _imageControl.Source = bitmap;
-            ApplyInitialSize(bitmap.PixelWidth, bitmap.PixelHeight);
+
+            if (applyInitialSize)
+            {
+                ApplyInitialSize(
+                    originalWidth > 0 ? originalWidth : bitmap.PixelWidth,
+                    originalHeight > 0 ? originalHeight : bitmap.PixelHeight);
+            }
+
             this.Title = "widgUI - " + Path.GetFileName(imagePath);
+        }
+
+        private static bool TryGetImageDimensions(string fullPath, out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+
+            try
+            {
+                BitmapFrame frame = BitmapDecoder.Create(
+                    new Uri(fullPath),
+                    BitmapCreateOptions.DelayCreation,
+                    BitmapCacheOption.None).Frames[0];
+
+                width = frame.PixelWidth;
+                height = frame.PixelHeight;
+                return width > 0 && height > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void ApplyDecodeLimit(BitmapImage bitmap, int originalWidth, int originalHeight, double maxDecodeDimension)
+        {
+            int decodeSize = (int)Math.Ceiling(maxDecodeDimension);
+            if (originalWidth <= 0 || originalHeight <= 0)
+            {
+                bitmap.DecodePixelWidth = decodeSize;
+                return;
+            }
+
+            if (originalWidth >= originalHeight)
+            {
+                bitmap.DecodePixelWidth = Math.Min(decodeSize, originalWidth);
+            }
+            else
+            {
+                bitmap.DecodePixelHeight = Math.Min(decodeSize, originalHeight);
+            }
+        }
+
+        private void EnsureImageDecodeMatchesDisplaySize()
+        {
+            if (string.IsNullOrEmpty(_imagePath) || _imageControl.Source == null)
+            {
+                return;
+            }
+
+            BitmapSource source = _imageControl.Source as BitmapSource;
+            if (source == null)
+            {
+                return;
+            }
+
+            double requiredDecode = Math.Max(this.Width, this.Height);
+            if (requiredDecode <= 0)
+            {
+                return;
+            }
+
+            requiredDecode = Math.Min(MaxSize, Math.Max(DefaultMaxDimension, requiredDecode));
+            int currentMaxPixel = Math.Max(source.PixelWidth, source.PixelHeight);
+            if (currentMaxPixel >= (int)Math.Ceiling(requiredDecode) - 1)
+            {
+                return;
+            }
+
+            LoadImage(_imagePath, requiredDecode, applyInitialSize: false);
         }
 
         private void ApplyInitialSize(int pixelWidth, int pixelHeight)
@@ -533,6 +640,8 @@ namespace WidgUI
             {
                 _aspectRatio = this.Width / this.Height;
             }
+
+            EnsureImageDecodeMatchesDisplaySize();
         }
 
         public ImageWidgetLayoutData ToLayoutData()
@@ -567,6 +676,7 @@ namespace WidgUI
                 this.Top = data.Top;
                 this.Width = data.Width;
                 this.Height = data.Height;
+                EnsureImageDecodeMatchesDisplaySize();
             }
 
             _isLocked = data.IsLocked;
