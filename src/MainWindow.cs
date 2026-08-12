@@ -496,6 +496,48 @@ namespace WidgUI
                 ((MenuItem)variantsParent.Items[3]).IsChecked = (_currentVariant == WidgetStyleVariant.HorizontalCompact);
             }
         }
+
+        public ClockLayoutData ToLayoutData()
+        {
+            return new ClockLayoutData
+            {
+                Visible = this.IsVisible,
+                StyleVariant = (int)_currentVariant,
+                Is24HourFormat = _is24HourFormat,
+                ShowDate = _showDate,
+                IsLocked = _isLocked,
+                Left = this.Left,
+                Top = this.Top
+            };
+        }
+
+        public void ApplyLayoutData(ClockLayoutData data)
+        {
+            if (data == null)
+            {
+                return;
+            }
+
+            if (Enum.IsDefined(typeof(WidgetStyleVariant), data.StyleVariant))
+            {
+                CurrentVariant = (WidgetStyleVariant)data.StyleVariant;
+            }
+
+            Is24HourFormat = data.Is24HourFormat;
+            ShowDate = data.ShowDate;
+            IsLocked = data.IsLocked;
+            this.Left = data.Left;
+            this.Top = data.Top;
+
+            if (data.Visible)
+            {
+                this.Show();
+            }
+            else
+            {
+                this.Hide();
+            }
+        }
     }
 }
 

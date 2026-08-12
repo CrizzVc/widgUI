@@ -49,13 +49,25 @@ namespace WidgUI
             public ImageSource IconSource { get; set; }
         }
         private System.Collections.Generic.List<ShortcutData> _shortcuts = new System.Collections.Generic.List<ShortcutData>();
+        private string _widgetId;
 
         public FolderWidgetWindow()
+            : this(null)
         {
+        }
+
+        public FolderWidgetWindow(FolderWidgetLayoutData layoutData)
+        {
+            _widgetId = Guid.NewGuid().ToString();
             InitializeWindow();
             BuildUI();
             SetupContextMenu();
             this.Loaded += FolderWidgetWindow_Loaded;
+
+            if (layoutData != null)
+            {
+                ApplyLayoutData(layoutData);
+            }
         }
 
         private void InitializeWindow()
@@ -895,6 +907,58 @@ namespace WidgUI
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
+        }
+
+        public FolderWidgetLayoutData ToLayoutData()
+        {
+            FolderWidgetLayoutData data = new FolderWidgetLayoutData
+            {
+                Id = _widgetId,
+                IsLocked = _isLocked,
+                Left = this.Left,
+                Top = this.Top
+            };
+
+            foreach (ShortcutData shortcut in _shortcuts)
+            {
+                if (!string.IsNullOrEmpty(shortcut.Path))
+                {
+                    data.Shortcuts.Add(shortcut.Path);
+                }
+            }
+
+            return data;
+        }
+
+        public void ApplyLayoutData(FolderWidgetLayoutData data)
+        {
+            if (data == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(data.Id))
+            {
+                _widgetId = data.Id;
+            }
+
+            _isLocked = data.IsLocked;
+            this.Left = data.Left;
+            this.Top = data.Top;
+
+            _shortcuts.Clear();
+            if (data.Shortcuts != null)
+            {
+                foreach (string path in data.Shortcuts)
+                {
+                    if (File.Exists(path))
+                    {
+                        AddShortcutData(path);
+                    }
+                }
+            }
+
+            RenderShortcuts();
         }
     }
 }

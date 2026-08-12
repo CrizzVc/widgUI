@@ -66,6 +66,7 @@ namespace WidgUI
         private Grid _stylePanel;
         private Grid _settingsPanel;
         private Grid _wallpaperPanel;
+        private Grid _profilesPanel;
         private Grid _widgetsPanel;
 
         // Settings items
@@ -80,7 +81,9 @@ namespace WidgUI
         private Border _styleBtnCompact;
 
         // Active state
-        private string _activeSubPanel = null; // "style", "settings", "wallpaper", or null
+        private string _activeSubPanel = null;
+        private StackPanel _profilesListPanel;
+        private TextBox _profileNameInput;
         private bool _isHovered = false;
         private double _screenCenterY; // Vertical center for symmetric expansion
         private DispatcherTimer _hoverTimer;
@@ -350,11 +353,13 @@ namespace WidgUI
             BuildStylePanel();
             BuildSettingsPanel();
             BuildWallpaperPanel();
+            BuildProfilesPanel();
             BuildWidgetsPanel();
 
             _subPanelContentGrid.Children.Add(_stylePanel);
             _subPanelContentGrid.Children.Add(_settingsPanel);
             _subPanelContentGrid.Children.Add(_wallpaperPanel);
+            _subPanelContentGrid.Children.Add(_profilesPanel);
             _subPanelContentGrid.Children.Add(_widgetsPanel);
 
             _menuGrid.Children.Add(_subPanelContainer);
@@ -559,6 +564,7 @@ namespace WidgUI
             Grid grid = new Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -609,6 +615,12 @@ namespace WidgUI
             Grid.SetColumn(btnExit, 1);
             grid.Children.Add(btnExit);
 
+            Border btnProfiles = CreateProfileMenuButton("Mis diseños", () => ShowSubPanel("profiles"));
+            Grid.SetRow(btnProfiles, 2);
+            Grid.SetColumn(btnProfiles, 0);
+            Grid.SetColumnSpan(btnProfiles, 2);
+            grid.Children.Add(btnProfiles);
+
             _settingsPanel.Children.Add(grid);
         }
 
@@ -649,6 +661,43 @@ namespace WidgUI
             {
                 setter(!getter());
                 UpdateToggleButtonVisual(border, getter());
+            };
+
+            return border;
+        }
+
+        private Border CreateProfileMenuButton(string text, Action action)
+        {
+            Border border = new Border
+            {
+                Height = 18,
+                Margin = new Thickness(2),
+                CornerRadius = new CornerRadius(9),
+                Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand
+            };
+
+            TextBlock tb = new TextBlock
+            {
+                Text = text,
+                FontSize = 8.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            border.Child = tb;
+
+            border.MouseEnter += (s, e) => border.Background = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255));
+            border.MouseLeave += (s, e) => border.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
+            border.MouseLeftButtonDown += (s, e) =>
+            {
+                if (action != null)
+                {
+                    action();
+                }
             };
 
             return border;
@@ -865,6 +914,35 @@ namespace WidgUI
                 File.WriteAllText(configFile, path);
             }
             catch {}
+        }
+
+        public WallpaperLayoutData ToWallpaperLayoutData()
+        {
+            return new WallpaperLayoutData
+            {
+                FolderPath = _wallpaperFolderPath,
+                ActiveWallpaperPath = _activeWallpaperPath
+            };
+        }
+
+        public void ApplyWallpaperLayoutData(WallpaperLayoutData data)
+        {
+            if (data == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(data.FolderPath) && Directory.Exists(data.FolderPath))
+            {
+                _wallpaperFolderPath = data.FolderPath;
+                SaveWallpaperFolder(data.FolderPath);
+            }
+
+            if (!string.IsNullOrEmpty(data.ActiveWallpaperPath) && File.Exists(data.ActiveWallpaperPath))
+            {
+                SetWallpaper(data.ActiveWallpaperPath);
+                _activeWallpaperPath = data.ActiveWallpaperPath;
+            }
         }
 
         private void LoadWallpaperPanelContent()
@@ -1234,6 +1312,200 @@ namespace WidgUI
             catch { return null; }
         }
 
+        #region Profiles Panel
+        private void BuildProfilesPanel()
+        {
+            _profilesPanel = new Grid { Visibility = Visibility.Collapsed };
+            _profilesPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _profilesPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _profilesPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            StackPanel saveSection = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+
+            TextBlock saveLabel = new TextBlock
+            {
+                Text = "Nombre del diseño",
+                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 205)),
+                FontSize = 9,
+                Margin = new Thickness(2, 0, 2, 4)
+            };
+            saveSection.Children.Add(saveLabel);
+
+            _profileNameInput = new TextBox
+            {
+                Height = 24,
+                Margin = new Thickness(2, 0, 2, 6),
+                Padding = new Thickness(6, 2, 6, 2),
+                FontSize = 10,
+                Background = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
+                CaretBrush = Brushes.White
+            };
+            saveSection.Children.Add(_profileNameInput);
+
+            Border btnSaveProfile = CreateProfileMenuButton("Guardar diseño actual", SaveCurrentProfile);
+            btnSaveProfile.Height = 22;
+            btnSaveProfile.Margin = new Thickness(2, 0, 2, 0);
+            btnSaveProfile.Background = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+            saveSection.Children.Add(btnSaveProfile);
+
+            Grid.SetRow(saveSection, 0);
+            _profilesPanel.Children.Add(saveSection);
+
+            TextBlock listLabel = new TextBlock
+            {
+                Text = "Diseños guardados",
+                Foreground = new SolidColorBrush(Color.FromRgb(200, 200, 205)),
+                FontSize = 9,
+                Margin = new Thickness(2, 0, 2, 4)
+            };
+            Grid.SetRow(listLabel, 1);
+            _profilesPanel.Children.Add(listLabel);
+
+            ScrollViewer scrollViewer = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Margin = new Thickness(0, 18, 0, 0)
+            };
+
+            Style scrollStyle = GetCustomScrollBarStyle();
+            if (scrollStyle != null)
+            {
+                scrollViewer.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar), scrollStyle);
+            }
+
+            _profilesListPanel = new StackPanel();
+            scrollViewer.Content = _profilesListPanel;
+            Grid.SetRow(scrollViewer, 2);
+            _profilesPanel.Children.Add(scrollViewer);
+        }
+
+        private void SaveCurrentProfile()
+        {
+            string profileName = ProfileService.SanitizeProfileName(_profileNameInput.Text);
+            if (string.IsNullOrWhiteSpace(profileName))
+            {
+                return;
+            }
+
+            try
+            {
+                LayoutProfile profile = WidgetRegistry.CaptureCurrentLayout(profileName);
+                ProfileService.SaveProfile(profile);
+                _profileNameInput.Text = profileName;
+                RefreshProfilesList();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("SaveCurrentProfile: " + ex.Message);
+            }
+        }
+
+        private void RefreshProfilesList()
+        {
+            if (_profilesListPanel == null)
+            {
+                return;
+            }
+
+            _profilesListPanel.Children.Clear();
+            System.Collections.Generic.List<ProfileSummary> profiles = ProfileService.ListProfiles();
+
+            if (profiles.Count == 0)
+            {
+                _profilesListPanel.Children.Add(new TextBlock
+                {
+                    Text = "Aún no hay diseños guardados.",
+                    Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                    FontSize = 9,
+                    Margin = new Thickness(4, 8, 4, 8),
+                    TextWrapping = TextWrapping.Wrap
+                });
+                return;
+            }
+
+            foreach (ProfileSummary summary in profiles)
+            {
+                Border item = new Border
+                {
+                    Margin = new Thickness(2, 2, 2, 6),
+                    Padding = new Thickness(8, 6, 8, 6),
+                    CornerRadius = new CornerRadius(10),
+                    Background = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255)),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                    BorderThickness = new Thickness(1)
+                };
+
+                Grid row = new Grid();
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                StackPanel info = new StackPanel();
+                info.Children.Add(new TextBlock
+                {
+                    Text = summary.Name,
+                    Foreground = Brushes.White,
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold
+                });
+                info.Children.Add(new TextBlock
+                {
+                    Text = summary.DisplayDate,
+                    Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                    FontSize = 8,
+                    Margin = new Thickness(0, 2, 0, 0)
+                });
+                Grid.SetColumn(info, 0);
+                row.Children.Add(info);
+
+                string profileName = summary.Name;
+                Border btnLoad = CreateProfileMenuButton("Cargar", () => LoadProfileByName(profileName));
+                btnLoad.Width = 52;
+                btnLoad.Height = 20;
+                btnLoad.Margin = new Thickness(4, 0, 0, 0);
+                btnLoad.Background = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+                Grid.SetColumn(btnLoad, 1);
+                row.Children.Add(btnLoad);
+
+                Border btnDelete = CreateProfileMenuButton("X", () => DeleteProfileByName(profileName));
+                btnDelete.Width = 22;
+                btnDelete.Height = 20;
+                btnDelete.Margin = new Thickness(4, 0, 0, 0);
+                btnDelete.Background = new SolidColorBrush(Color.FromRgb(239, 68, 68));
+                Grid.SetColumn(btnDelete, 2);
+                row.Children.Add(btnDelete);
+
+                item.Child = row;
+                _profilesListPanel.Children.Add(item);
+            }
+        }
+
+        private void LoadProfileByName(string profileName)
+        {
+            LayoutProfile profile = ProfileService.LoadProfile(profileName);
+            if (profile == null)
+            {
+                return;
+            }
+
+            WidgetRegistry.ApplyLayout(profile);
+            ProfileService.SaveLastProfileName(profileName);
+            if (_profileNameInput != null)
+            {
+                _profileNameInput.Text = profileName;
+            }
+        }
+
+        private void DeleteProfileByName(string profileName)
+        {
+            ProfileService.DeleteProfile(profileName);
+            RefreshProfilesList();
+        }
+        #endregion
+
         private void BuildWidgetsPanel()
         {
             _widgetsPanel = new Grid { Visibility = Visibility.Collapsed };
@@ -1266,19 +1538,22 @@ namespace WidgUI
             grid.Children.Add(clockWidget);
 
             // Mock widgets
-            grid.Children.Add(CreateWidgetItem("Carpetas", "\uE838", false, () => 
+            grid.Children.Add(CreateWidgetItem("Carpetas", "\uE838", false, () =>
             {
-                FolderWidgetWindow newFolder = new FolderWidgetWindow();
-                newFolder.Show();
-                return false; // Does not toggle border active state permanently
+                WidgetRegistry.OpenFolderWidget();
+                return false;
             }));
             grid.Children.Add(CreateWidgetItem("Clima", "\uE706", false, null));
             grid.Children.Add(CreateWidgetItem("Sistema", "\uE90F", false, null));
-            grid.Children.Add(CreateWidgetItem("Música", "\uE8D6", false, null));
+            grid.Children.Add(CreateWidgetItem("Música", "\uE8D6", false, () =>
+            {
+                WidgetRegistry.OpenMusicWidget();
+                return false;
+            }));
             grid.Children.Add(CreateWidgetItem("Notas", "\uE70B", false, null));
             grid.Children.Add(CreateWidgetItem("Fotos", "\uE8B9", false, () =>
             {
-                ImageWidgetWindow.CreateFromFilePicker();
+                WidgetRegistry.OpenImageWidgetsFromPicker();
                 return false;
             }));
             grid.Children.Add(CreateWidgetItem("Juegos", "\uE7FC", false, null));
@@ -1412,6 +1687,7 @@ namespace WidgUI
                 _stylePanel.Visibility = Visibility.Collapsed;
                 _settingsPanel.Visibility = Visibility.Collapsed;
                 _wallpaperPanel.Visibility = Visibility.Collapsed;
+                if (_profilesPanel != null) _profilesPanel.Visibility = Visibility.Collapsed;
                 if (_widgetsPanel != null) _widgetsPanel.Visibility = Visibility.Collapsed;
 
                 if (panelName == "style")
@@ -1446,6 +1722,13 @@ namespace WidgUI
                 {
                     _subPanelTitle.Text = "WIDGETS";
                     _widgetsPanel.Visibility = Visibility.Visible;
+                    AnimateMenuSize(260, 360);
+                }
+                else if (panelName == "profiles")
+                {
+                    _subPanelTitle.Text = "MIS DISEÑOS";
+                    _profilesPanel.Visibility = Visibility.Visible;
+                    RefreshProfilesList();
                     AnimateMenuSize(260, 360);
                 }
 

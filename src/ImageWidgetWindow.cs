@@ -39,23 +39,36 @@ namespace WidgUI
         private Border _resizeHandle;
         private DispatcherTimer _idleTimer;
         private string _imagePath;
+        private string _widgetId;
 
         public ImageWidgetWindow(string imagePath)
+            : this(CreateLayoutFromPath(imagePath))
         {
-            if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath))
-            {
-                throw new ArgumentException("Ruta de imagen invalida.", "imagePath");
-            }
-
-            _imagePath = imagePath;
-            InitializeWindow();
-            BuildUI();
-            LoadImage(imagePath);
-            SetupContextMenu();
-            this.Loaded += ImageWidgetWindow_Loaded;
         }
 
-        public static void CreateFromFilePicker()
+        public ImageWidgetWindow(ImageWidgetLayoutData layoutData)
+        {
+            if (layoutData == null || string.IsNullOrEmpty(layoutData.ImagePath) || !File.Exists(layoutData.ImagePath))
+            {
+                throw new ArgumentException("Ruta de imagen invalida.", "layoutData");
+            }
+
+            _widgetId = string.IsNullOrEmpty(layoutData.Id) ? Guid.NewGuid().ToString() : layoutData.Id;
+            _imagePath = layoutData.ImagePath;
+            InitializeWindow();
+            BuildUI();
+            LoadImage(_imagePath);
+            SetupContextMenu();
+            this.Loaded += ImageWidgetWindow_Loaded;
+            ApplyLayoutData(layoutData);
+        }
+
+        private static ImageWidgetLayoutData CreateLayoutFromPath(string imagePath)
+        {
+            return new ImageWidgetLayoutData { ImagePath = imagePath };
+        }
+
+        public static void CreateFromFilePicker(Action<ImageWidgetWindow> onCreated)
         {
             OpenFileDialog dialog = new OpenFileDialog
             {
@@ -77,6 +90,10 @@ namespace WidgUI
                 }
 
                 ImageWidgetWindow widget = new ImageWidgetWindow(file);
+                if (onCreated != null)
+                {
+                    onCreated(widget);
+                }
                 widget.Show();
             }
         }
@@ -526,6 +543,44 @@ namespace WidgUI
 
             this.Width = ClampSize(contentWidth + (CardPadding * 2) + 2);
             this.Height = ClampSize(contentHeight + (CardPadding * 2) + 2);
+        }
+
+        public ImageWidgetLayoutData ToLayoutData()
+        {
+            return new ImageWidgetLayoutData
+            {
+                Id = _widgetId,
+                ImagePath = _imagePath,
+                IsLocked = _isLocked,
+                Left = this.Left,
+                Top = this.Top,
+                Width = this.Width,
+                Height = this.Height
+            };
+        }
+
+        public void ApplyLayoutData(ImageWidgetLayoutData data)
+        {
+            if (data == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(data.Id))
+            {
+                _widgetId = data.Id;
+            }
+
+            if (data.Width >= MinSize && data.Height >= MinSize)
+            {
+                this.Left = data.Left;
+                this.Top = data.Top;
+                this.Width = data.Width;
+                this.Height = data.Height;
+            }
+
+            _isLocked = data.IsLocked;
+            _resizeHandle.Visibility = _isLocked ? Visibility.Collapsed : Visibility.Visible;
         }
     }
 }

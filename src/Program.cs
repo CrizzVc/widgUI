@@ -28,10 +28,12 @@ namespace WidgUI
 
                 MainWindow mainWindow = new MainWindow();
                 EdgeMenuWindow edgeMenu = new EdgeMenuWindow(mainWindow);
+                WidgetRegistry.Initialize(mainWindow, edgeMenu);
                 _trayManager = new TrayManager(mainWindow);
 
                 mainWindow.Show();
                 edgeMenu.Show();
+                WidgetRegistry.LoadLastProfileIfAvailable();
                 app.Run();
 
                 if (_trayManager != null)
