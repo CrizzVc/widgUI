@@ -1276,7 +1276,11 @@ namespace WidgUI
             grid.Children.Add(CreateWidgetItem("Sistema", "\uE90F", false, null));
             grid.Children.Add(CreateWidgetItem("Música", "\uE8D6", false, null));
             grid.Children.Add(CreateWidgetItem("Notas", "\uE70B", false, null));
-            grid.Children.Add(CreateWidgetItem("Fotos", "\uE8B9", false, null));
+            grid.Children.Add(CreateWidgetItem("Fotos", "\uE8B9", false, () =>
+            {
+                ImageWidgetWindow.CreateFromFilePicker();
+                return false;
+            }));
             grid.Children.Add(CreateWidgetItem("Juegos", "\uE7FC", false, null));
             grid.Children.Add(CreateWidgetItem("Calendario", "\uE787", false, null));
 
