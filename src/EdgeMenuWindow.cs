@@ -108,8 +108,7 @@ namespace WidgUI
         private Grid _chooseFolderContainer;
         private Grid _thumbnailsContainer;
         private TextBlock _folderPathText;
-        private DispatcherTimer _wallpaperDebounceTimer;
-        private string _pendingWallpaperPath;
+        private string _previewWallpaperPath;
 
         // Arrow key navigation
         private int _selectedThumbnailIndex = -1;
@@ -1109,6 +1108,7 @@ namespace WidgUI
             {
                 SetWallpaper(data.ActiveWallpaperPath);
                 _activeWallpaperPath = data.ActiveWallpaperPath;
+                _previewWallpaperPath = data.ActiveWallpaperPath;
             }
 
             PrefetchWallpaperPanelContent();
@@ -1425,8 +1425,7 @@ namespace WidgUI
             border.MouseLeftButtonDown += (s, e) =>
             {
                 _activeWallpaperPath = filePath;
-                // Set permanently
-                SetWallpaper(filePath);
+                PreviewWallpaper(filePath);
                 
                 // Synchronize the selected index to allow arrow navigation from this point
                 _selectedThumbnailIndex = _thumbnailsStackPanel.Children.IndexOf(border);
@@ -1438,24 +1437,16 @@ namespace WidgUI
             return border;
         }
 
-        private void HoverWallpaper(string filePath)
+        private void PreviewWallpaper(string filePath)
         {
-            _pendingWallpaperPath = filePath;
-            if (_wallpaperDebounceTimer == null)
+            if (string.IsNullOrEmpty(filePath) ||
+                string.Equals(_previewWallpaperPath, filePath, StringComparison.OrdinalIgnoreCase))
             {
-                _wallpaperDebounceTimer = new DispatcherTimer();
-                _wallpaperDebounceTimer.Interval = TimeSpan.FromMilliseconds(200); // 200ms debounce
-                _wallpaperDebounceTimer.Tick += (s, e) =>
-                {
-                    _wallpaperDebounceTimer.Stop();
-                    if (!string.IsNullOrEmpty(_pendingWallpaperPath))
-                    {
-                        SetWallpaperSmooth(_pendingWallpaperPath);
-                    }
-                };
+                return;
             }
-            _wallpaperDebounceTimer.Stop();
-            _wallpaperDebounceTimer.Start();
+
+            _previewWallpaperPath = filePath;
+            SetWallpaper(filePath);
         }
 
         private void SetWallpaper(string filePath)
@@ -1515,28 +1506,28 @@ namespace WidgUI
             {
                 EnsureOverlayWindow();
 
-                // Load the new wallpaper image for the overlay
-                BitmapImage bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(filePath);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.EndInit();
-                _overlayImage.Source = bmp;
+                BitmapSource previewSource = GetOrCreateWallpaperPreviewBitmap(filePath);
+                _overlayImage.Source = previewSource;
 
-                // Fade in the overlay
+                _wallpaperOverlay.BeginAnimation(Window.OpacityProperty, null);
+
                 DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(350))
                 {
                     DecelerationRatio = 0.7
                 };
                 fadeIn.Completed += (s, e) =>
                 {
-                    // Once fully visible, apply actual wallpaper behind
                     SetWallpaper(filePath);
+                    _previewWallpaperPath = filePath;
 
-                    // Then fade out overlay
                     DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(300))
                     {
                         BeginTime = TimeSpan.FromMilliseconds(100)
+                    };
+                    fadeOut.Completed += (s2, e2) =>
+                    {
+                        _wallpaperOverlay.BeginAnimation(Window.OpacityProperty, null);
+                        _overlayImage.Source = null;
                     };
                     _wallpaperOverlay.BeginAnimation(Window.OpacityProperty, fadeOut);
                 };
@@ -1545,9 +1536,45 @@ namespace WidgUI
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Smooth wallpaper error: " + ex.Message);
-                // Fallback to direct set
-                SetWallpaper(filePath);
+                PreviewWallpaper(filePath);
             }
+        }
+
+        private static BitmapSource GetOrCreateWallpaperPreviewBitmap(string filePath)
+        {
+            int decodeWidth = (int)Math.Max(640, SystemParameters.PrimaryScreenWidth);
+            long writeTicks = File.GetLastWriteTimeUtc(filePath).Ticks;
+            string cacheKey = filePath + "|preview|" + writeTicks + "|" + decodeWidth;
+
+            BitmapSource cached;
+            if (_wallpaperThumbnailCache.TryGetValue(cacheKey, out cached))
+            {
+                return cached;
+            }
+
+            BitmapFrame frame = BitmapDecoder.Create(
+                new Uri(filePath),
+                BitmapCreateOptions.DelayCreation,
+                BitmapCacheOption.None).Frames[0];
+
+            BitmapImage bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(filePath);
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            if (frame.PixelWidth >= frame.PixelHeight)
+            {
+                bitmap.DecodePixelWidth = Math.Min(decodeWidth, frame.PixelWidth);
+            }
+            else
+            {
+                bitmap.DecodePixelHeight = Math.Min(decodeWidth, frame.PixelHeight);
+            }
+
+            bitmap.EndInit();
+            bitmap.Freeze();
+
+            _wallpaperThumbnailCache[cacheKey] = bitmap;
+            return bitmap;
         }
 
         private void SelectThumbnailByIndex(int index)
@@ -1593,8 +1620,7 @@ namespace WidgUI
                 _thumbnailsScrollViewer.ScrollToVerticalOffset(targetOffset);
             }
 
-            // Preview the wallpaper
-            HoverWallpaper(_loadedImageFiles[_selectedThumbnailIndex]);
+            PreviewWallpaper(_loadedImageFiles[_selectedThumbnailIndex]);
         }
 
         private void EdgeMenuWindow_KeyDown(object sender, KeyEventArgs e)
@@ -1614,13 +1640,12 @@ namespace WidgUI
             }
             else if (e.Key == Key.Enter)
             {
-                // Confirm selection
                 if (_selectedThumbnailIndex >= 0 && _selectedThumbnailIndex < _loadedImageFiles.Length)
                 {
                     string filePath = _loadedImageFiles[_selectedThumbnailIndex];
                     _activeWallpaperPath = filePath;
-                    SetWallpaperSmooth(filePath);
-                    SelectThumbnailByIndex(_selectedThumbnailIndex); // Refresh highlights
+                    PreviewWallpaper(filePath);
+                    SelectThumbnailByIndex(_selectedThumbnailIndex);
                 }
                 e.Handled = true;
             }
