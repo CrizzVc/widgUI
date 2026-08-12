@@ -6,6 +6,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using System.Windows.Media.Animation;
 using Microsoft.Win32;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
@@ -18,17 +20,24 @@ namespace WidgUI
         private const double MaxSize = 800;
         private const double CardPadding = 8;
         private const double DefaultMaxDimension = 280;
+        private const double ImageCornerRadius = 14;
+        private const int IdleHideDelayMs = 2500;
+        private const int ChromeFadeMs = 350;
 
         private bool _isLocked;
         private bool _embeddedInDesktop = true;
         private bool _isResizing;
+        private bool _isChromeVisible = true;
         private Point _resizeStartPoint;
         private double _resizeStartWidth;
         private double _resizeStartHeight;
 
         private Border _cardBorder;
+        private Border _chromeLayer;
+        private Border _imageBorder;
         private System.Windows.Controls.Image _imageControl;
         private Border _resizeHandle;
+        private DispatcherTimer _idleTimer;
         private string _imagePath;
 
         public ImageWidgetWindow(string imagePath)
@@ -108,6 +117,16 @@ namespace WidgUI
             this.Top = 420;
 
             this.MouseLeftButtonDown += ImageWidgetWindow_MouseLeftButtonDown;
+            this.MouseLeftButtonUp += (s, e) => StartIdleTimer();
+            this.MouseEnter += (s, e) => ShowChrome();
+            this.MouseLeave += (s, e) => StartIdleTimer();
+
+            _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(IdleHideDelayMs) };
+            _idleTimer.Tick += (s, e) =>
+            {
+                _idleTimer.Stop();
+                HideChrome();
+            };
         }
 
         private void ImageWidgetWindow_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -124,7 +143,9 @@ namespace WidgUI
 
             if (e.ButtonState == MouseButtonState.Pressed)
             {
+                ShowChrome();
                 this.DragMove();
+                StartIdleTimer();
             }
         }
 
@@ -149,18 +170,26 @@ namespace WidgUI
             {
                 DesktopManager.EmbedInDesktop(this);
             }
+
+            StartIdleTimer();
         }
 
         private void BuildUI()
         {
             _cardBorder = new Border
             {
+                Background = Brushes.Transparent,
+                ClipToBounds = true
+            };
+
+            Grid mainGrid = new Grid();
+
+            _chromeLayer = new Border
+            {
                 Background = new SolidColorBrush(Color.FromArgb(160, 20, 20, 30)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Padding = new Thickness(CardPadding),
-                ClipToBounds = true,
+                CornerRadius = new CornerRadius(ImageCornerRadius + 2),
                 Effect = new DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -171,7 +200,13 @@ namespace WidgUI
                 }
             };
 
-            Grid mainGrid = new Grid();
+            _imageBorder = new Border
+            {
+                CornerRadius = new CornerRadius(ImageCornerRadius),
+                ClipToBounds = true,
+                Margin = new Thickness(CardPadding),
+                Background = Brushes.Transparent
+            };
 
             _imageControl = new System.Windows.Controls.Image
             {
@@ -180,6 +215,7 @@ namespace WidgUI
                 VerticalAlignment = VerticalAlignment.Stretch
             };
             RenderOptions.SetBitmapScalingMode(_imageControl, BitmapScalingMode.HighQuality);
+            _imageBorder.Child = _imageControl;
 
             _resizeHandle = new Border
             {
@@ -188,7 +224,7 @@ namespace WidgUI
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Background = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255)),
-                CornerRadius = new CornerRadius(6, 0, 16, 0),
+                CornerRadius = new CornerRadius(6, 0, ImageCornerRadius, 0),
                 Cursor = Cursors.SizeNWSE,
                 ToolTip = "Arrastra para cambiar tamano"
             };
@@ -219,10 +255,76 @@ namespace WidgUI
             _resizeHandle.MouseMove += ResizeHandle_MouseMove;
             _resizeHandle.MouseLeftButtonUp += ResizeHandle_MouseLeftButtonUp;
 
-            mainGrid.Children.Add(_imageControl);
+            mainGrid.Children.Add(_chromeLayer);
+            mainGrid.Children.Add(_imageBorder);
             mainGrid.Children.Add(_resizeHandle);
             _cardBorder.Child = mainGrid;
             this.Content = _cardBorder;
+        }
+
+        private void ShowChrome()
+        {
+            _idleTimer.Stop();
+
+            if (_isChromeVisible)
+            {
+                return;
+            }
+
+            _isChromeVisible = true;
+            AnimateChrome(1, CardPadding);
+            if (!_isLocked)
+            {
+                _resizeHandle.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void HideChrome()
+        {
+            if (!_isChromeVisible || _isResizing || this.IsMouseOver)
+            {
+                return;
+            }
+
+            _isChromeVisible = false;
+            AnimateChrome(0, 0);
+            _resizeHandle.Visibility = Visibility.Collapsed;
+        }
+
+        private void AnimateChrome(double targetOpacity, double targetMargin)
+        {
+            DoubleAnimation opacityAnim = new DoubleAnimation(targetOpacity, TimeSpan.FromMilliseconds(ChromeFadeMs))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            _chromeLayer.BeginAnimation(UIElement.OpacityProperty, opacityAnim);
+
+            ThicknessAnimation marginAnim = new ThicknessAnimation(
+                new Thickness(targetMargin),
+                TimeSpan.FromMilliseconds(ChromeFadeMs))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            _imageBorder.BeginAnimation(Border.MarginProperty, marginAnim);
+
+            DoubleAnimation handleAnim = new DoubleAnimation(
+                (!_isLocked && targetOpacity > 0) ? 1 : 0,
+                TimeSpan.FromMilliseconds(ChromeFadeMs))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            _resizeHandle.BeginAnimation(UIElement.OpacityProperty, handleAnim);
+        }
+
+        private void StartIdleTimer()
+        {
+            _idleTimer.Stop();
+            if (!_isChromeVisible || _isResizing)
+            {
+                return;
+            }
+
+            _idleTimer.Start();
         }
 
         private void ResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -233,6 +335,7 @@ namespace WidgUI
             }
 
             _isResizing = true;
+            ShowChrome();
             _resizeStartPoint = e.GetPosition(this);
             _resizeStartWidth = this.Width;
             _resizeStartHeight = this.Height;
@@ -284,6 +387,7 @@ namespace WidgUI
             _isResizing = false;
             _resizeHandle.ReleaseMouseCapture();
             _resizeHandle.Background = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255));
+            StartIdleTimer();
         }
 
         private static double ClampSize(double value)
@@ -357,7 +461,15 @@ namespace WidgUI
             itemLock.Click += (s, e) =>
             {
                 _isLocked = itemLock.IsChecked;
-                _resizeHandle.Visibility = _isLocked ? Visibility.Collapsed : Visibility.Visible;
+                if (_isLocked)
+                {
+                    _resizeHandle.Visibility = Visibility.Collapsed;
+                }
+                else if (_isChromeVisible)
+                {
+                    _resizeHandle.Visibility = Visibility.Visible;
+                    _resizeHandle.Opacity = 1;
+                }
             };
 
             MenuItem itemSize = new MenuItem { Header = "Tamano" };
@@ -375,6 +487,8 @@ namespace WidgUI
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
+            _cardBorder.ContextMenuOpening += (s, e) => ShowChrome();
+            cm.Closed += (s, e) => StartIdleTimer();
         }
 
         private MenuItem CreateSizeMenuItem(string label, double targetSize)
