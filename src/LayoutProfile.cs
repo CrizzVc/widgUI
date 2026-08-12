@@ -52,6 +52,9 @@ namespace WidgUI
         [DataMember(Name = "is24HourFormat")]
         public bool Is24HourFormat { get; set; }
 
+        [DataMember(Name = "showAmPm")]
+        public bool ShowAmPm { get; set; }
+
         [DataMember(Name = "showDate")]
         public bool ShowDate { get; set; }
 

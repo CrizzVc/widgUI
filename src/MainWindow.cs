@@ -14,7 +14,9 @@ namespace WidgUI
         MinimalistVertical,
         GlassmorphismCard,
         NeumorphismDark,
-        HorizontalCompact
+        HorizontalCompact,
+        OutlineHorizontal,
+        StackedMono
     }
 
     public class MainWindow : Window
@@ -27,9 +29,12 @@ namespace WidgUI
         private Border _cardBorder;
         private StackPanel _mainStack;
         private StackPanel _clockStack;
+        private Grid _hoursHost;
+        private bool _hoursUsesOutline;
         private DispatcherTimer _timer;
 
         private bool _is24HourFormat = true;
+        private bool _showAmPm = true;
         private bool _showDate = false;
         private bool _isLocked = false;
         private bool _embeddedInDesktop = true;
@@ -69,6 +74,20 @@ namespace WidgUI
                 if (_is24HourFormat != value)
                 {
                     _is24HourFormat = value;
+                    UpdateTimeDisplay();
+                    SetupContextMenu();
+                }
+            }
+        }
+
+        public bool ShowAmPm
+        {
+            get { return _showAmPm; }
+            set
+            {
+                if (_showAmPm != value)
+                {
+                    _showAmPm = value;
                     UpdateTimeDisplay();
                     SetupContextMenu();
                 }
@@ -191,7 +210,7 @@ namespace WidgUI
         {
             _cardBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)),
+                Background = Brushes.Transparent,
                 BorderBrush = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Padding = new Thickness(10)
@@ -279,7 +298,8 @@ namespace WidgUI
                 Effect = CreateTextShadow()
             };
 
-            _clockStack.Children.Add(_hoursText);
+            _clockStack.Children.Add(_hoursHost = new Grid());
+            _hoursHost.Children.Add(_hoursText);
             _clockStack.Children.Add(_separatorText);
             _clockStack.Children.Add(_minutesText);
 
@@ -428,16 +448,23 @@ namespace WidgUI
         public void ApplyStyleVariant(WidgetStyleVariant variant)
         {
             _currentVariant = variant;
+            _hoursUsesOutline = false;
+            ClearHoursOutline();
+
+            FontFamily defaultFont = new FontFamily("Segoe UI, Arial");
+            _hoursText.FontFamily = defaultFont;
+            _minutesText.FontFamily = defaultFont;
+            _hoursText.FontWeight = FontWeights.Bold;
+            _minutesText.FontWeight = FontWeights.Bold;
+            _hoursText.Effect = null;
+            _minutesText.Effect = null;
+            _cardBorder.Padding = new Thickness(10);
+            ApplyTransparentCardShell();
 
             switch (variant)
             {
                 case WidgetStyleVariant.MinimalistVertical:
                     SetClockSize(170, 230);
-                    _cardBorder.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
-                    _cardBorder.BorderBrush = Brushes.Transparent;
-                    _cardBorder.BorderThickness = new Thickness(0);
-                    _cardBorder.CornerRadius = new CornerRadius(0);
-                    _cardBorder.Effect = null;
 
                     _clockStack.Orientation = Orientation.Vertical;
                     _separatorText.Visibility = Visibility.Collapsed;
@@ -455,18 +482,6 @@ namespace WidgUI
 
                 case WidgetStyleVariant.GlassmorphismCard:
                     SetClockSize(190, 240);
-                    _cardBorder.Background = new SolidColorBrush(Color.FromArgb(120, 20, 25, 40));
-                    _cardBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
-                    _cardBorder.BorderThickness = new Thickness(1.5);
-                    _cardBorder.CornerRadius = new CornerRadius(24);
-                    _cardBorder.Effect = new DropShadowEffect
-                    {
-                        Color = Colors.Black,
-                        Direction = 270,
-                        ShadowDepth = 8,
-                        Opacity = 0.4,
-                        BlurRadius = 20
-                    };
 
                     _clockStack.Orientation = Orientation.Vertical;
                     _separatorText.Visibility = Visibility.Collapsed;
@@ -474,28 +489,14 @@ namespace WidgUI
                     _hoursText.FontSize = 70;
                     _hoursText.Margin = new Thickness(0, 0, 0, -8);
                     _hoursText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F8FAFC"));
-                    _hoursText.Effect = null;
 
                     _minutesText.FontSize = 70;
                     _minutesText.Margin = new Thickness(0, -8, 0, 4);
                     _minutesText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#38BDF8"));
-                    _minutesText.Effect = null;
                     break;
 
                 case WidgetStyleVariant.NeumorphismDark:
                     SetClockSize(190, 240);
-                    _cardBorder.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E1E2E"));
-                    _cardBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#313244"));
-                    _cardBorder.BorderThickness = new Thickness(2);
-                    _cardBorder.CornerRadius = new CornerRadius(28);
-                    _cardBorder.Effect = new DropShadowEffect
-                    {
-                        Color = (Color)ColorConverter.ConvertFromString("#11111B"),
-                        Direction = 270,
-                        ShadowDepth = 10,
-                        Opacity = 0.6,
-                        BlurRadius = 18
-                    };
 
                     _clockStack.Orientation = Orientation.Vertical;
                     _separatorText.Visibility = Visibility.Collapsed;
@@ -503,46 +504,138 @@ namespace WidgUI
                     _hoursText.FontSize = 70;
                     _hoursText.Margin = new Thickness(0, 0, 0, -8);
                     _hoursText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CBA6F7"));
-                    _hoursText.Effect = null;
 
                     _minutesText.FontSize = 70;
                     _minutesText.Margin = new Thickness(0, -8, 0, 4);
                     _minutesText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5E0DC"));
-                    _minutesText.Effect = null;
                     break;
 
                 case WidgetStyleVariant.HorizontalCompact:
                     SetClockSize(260, 110);
-                    _cardBorder.Background = new SolidColorBrush(Color.FromArgb(180, 15, 23, 42));
-                    _cardBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 56, 189, 248));
-                    _cardBorder.BorderThickness = new Thickness(1);
-                    _cardBorder.CornerRadius = new CornerRadius(18);
-                    _cardBorder.Effect = new DropShadowEffect
-                    {
-                        Color = Colors.Black,
-                        Direction = 270,
-                        ShadowDepth = 5,
-                        Opacity = 0.5,
-                        BlurRadius = 15
-                    };
 
                     _clockStack.Orientation = Orientation.Horizontal;
                     _separatorText.Visibility = Visibility.Visible;
                     _separatorText.Margin = new Thickness(2, -8, 2, 0);
+                    _separatorText.Foreground = Brushes.White;
+                    _separatorText.Effect = null;
 
                     _hoursText.FontSize = 56;
                     _hoursText.Margin = new Thickness(0);
                     _hoursText.Foreground = Brushes.White;
-                    _hoursText.Effect = null;
 
                     _minutesText.FontSize = 56;
                     _minutesText.Margin = new Thickness(0);
                     _minutesText.Foreground = Brushes.White;
-                    _minutesText.Effect = null;
+                    break;
+
+                case WidgetStyleVariant.OutlineHorizontal:
+                    SetClockSize(300, 120);
+                    _cardBorder.Padding = new Thickness(14, 6, 14, 6);
+
+                    _clockStack.Orientation = Orientation.Horizontal;
+                    _separatorText.Visibility = Visibility.Collapsed;
+
+                    FontFamily condensedFont = new FontFamily("Arial Narrow, Segoe UI");
+                    _hoursText.FontFamily = condensedFont;
+                    _minutesText.FontFamily = condensedFont;
+                    _hoursText.FontSize = 92;
+                    _minutesText.FontSize = 92;
+                    _hoursText.FontWeight = FontWeights.Black;
+                    _minutesText.FontWeight = FontWeights.Black;
+                    _hoursText.Margin = new Thickness(0, 0, -8, 0);
+                    _minutesText.Margin = new Thickness(-8, 0, 0, 0);
+                    _minutesText.Foreground = Brushes.White;
+                    _hoursUsesOutline = true;
+                    break;
+
+                case WidgetStyleVariant.StackedMono:
+                    SetClockSize(170, 150);
+                    _cardBorder.Padding = new Thickness(12, 4, 12, 4);
+
+                    _clockStack.Orientation = Orientation.Vertical;
+                    _separatorText.Visibility = Visibility.Collapsed;
+
+                    FontFamily stackedFont = new FontFamily("Segoe UI, Arial");
+                    _hoursText.FontFamily = stackedFont;
+                    _minutesText.FontFamily = stackedFont;
+                    _hoursText.FontSize = 88;
+                    _minutesText.FontSize = 88;
+                    _hoursText.FontWeight = FontWeights.Black;
+                    _minutesText.FontWeight = FontWeights.Black;
+                    _hoursText.Margin = new Thickness(0, 0, 0, -30);
+                    _minutesText.Margin = new Thickness(0, -30, 0, 0);
+                    _hoursText.Foreground = new SolidColorBrush(Color.FromRgb(212, 212, 218));
+                    _minutesText.Foreground = new SolidColorBrush(Color.FromRgb(161, 161, 170));
                     break;
             }
 
             UpdateTimeDisplay();
+        }
+
+        private void ApplyTransparentCardShell()
+        {
+            _cardBorder.Background = Brushes.Transparent;
+            _cardBorder.BorderBrush = Brushes.Transparent;
+            _cardBorder.BorderThickness = new Thickness(0);
+            _cardBorder.CornerRadius = new CornerRadius(0);
+            _cardBorder.Effect = null;
+        }
+
+        private void ClearHoursOutline()
+        {
+            if (_hoursHost == null)
+            {
+                return;
+            }
+
+            for (int i = _hoursHost.Children.Count - 1; i >= 0; i--)
+            {
+                if (_hoursHost.Children[i] != _hoursText)
+                {
+                    _hoursHost.Children.RemoveAt(i);
+                }
+            }
+        }
+
+        private void SyncHoursOutline()
+        {
+            if (_hoursHost == null || _hoursText == null || !_hoursUsesOutline)
+            {
+                return;
+            }
+
+            ClearHoursOutline();
+            _hoursText.Foreground = Brushes.Transparent;
+            Panel.SetZIndex(_hoursText, 10);
+
+            double stroke = 1.6;
+            int[][] offsets =
+            {
+                new[] { -1, 0 }, new[] { 1, 0 }, new[] { 0, -1 }, new[] { 0, 1 },
+                new[] { -1, -1 }, new[] { 1, -1 }, new[] { -1, 1 }, new[] { 1, 1 }
+            };
+
+            foreach (int[] offset in offsets)
+            {
+                TextBlock layer = CreateOutlineLayer(_hoursText);
+                layer.Margin = new Thickness(offset[0] * stroke, offset[1] * stroke, 0, 0);
+                _hoursHost.Children.Insert(0, layer);
+            }
+        }
+
+        private static TextBlock CreateOutlineLayer(TextBlock source)
+        {
+            return new TextBlock
+            {
+                Text = source.Text,
+                FontFamily = source.FontFamily,
+                FontSize = source.FontSize,
+                FontWeight = source.FontWeight,
+                Foreground = Brushes.White,
+                HorizontalAlignment = source.HorizontalAlignment,
+                TextAlignment = source.TextAlignment,
+                IsHitTestVisible = false
+            };
         }
 
         private void SetupTimer()
@@ -568,11 +661,23 @@ namespace WidgUI
             else
             {
                 _hoursText.Text = now.ToString("hh");
-                _amPmText.Text = now.ToString("tt", CultureInfo.InvariantCulture).ToUpper();
-                _amPmText.Visibility = Visibility.Visible;
+                if (_showAmPm)
+                {
+                    _amPmText.Text = now.ToString("tt", CultureInfo.InvariantCulture).ToUpper();
+                    _amPmText.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    _amPmText.Visibility = Visibility.Collapsed;
+                }
             }
 
             _minutesText.Text = now.ToString("mm");
+
+            if (_hoursUsesOutline)
+            {
+                SyncHoursOutline();
+            }
 
             if (_showDate)
             {
@@ -607,18 +712,34 @@ namespace WidgUI
             MenuItem v4 = new MenuItem { Header = "Horizontal Compacto", IsCheckable = true, IsChecked = (_currentVariant == WidgetStyleVariant.HorizontalCompact) };
             v4.Click += (s, e) => { ApplyStyleVariant(WidgetStyleVariant.HorizontalCompact); UpdateContextMenuChecks(itemVariants); };
 
+            MenuItem v5 = new MenuItem { Header = "Contorno Horizontal", IsCheckable = true, IsChecked = (_currentVariant == WidgetStyleVariant.OutlineHorizontal) };
+            v5.Click += (s, e) => { ApplyStyleVariant(WidgetStyleVariant.OutlineHorizontal); UpdateContextMenuChecks(itemVariants); };
+
+            MenuItem v6 = new MenuItem { Header = "Apilado Mono", IsCheckable = true, IsChecked = (_currentVariant == WidgetStyleVariant.StackedMono) };
+            v6.Click += (s, e) => { ApplyStyleVariant(WidgetStyleVariant.StackedMono); UpdateContextMenuChecks(itemVariants); };
+
             itemVariants.Items.Add(v1);
             itemVariants.Items.Add(v2);
             itemVariants.Items.Add(v3);
             itemVariants.Items.Add(v4);
+            itemVariants.Items.Add(v5);
+            itemVariants.Items.Add(v6);
 
             MenuItem itemFormat = new MenuItem { Header = "Formato 24 Horas" };
             itemFormat.IsCheckable = true;
             itemFormat.IsChecked = _is24HourFormat;
             itemFormat.Click += (s, e) =>
             {
-                _is24HourFormat = itemFormat.IsChecked;
-                UpdateTimeDisplay();
+                Is24HourFormat = itemFormat.IsChecked;
+            };
+
+            MenuItem itemAmPm = new MenuItem { Header = "Mostrar AM/PM" };
+            itemAmPm.IsCheckable = true;
+            itemAmPm.IsChecked = _showAmPm;
+            itemAmPm.IsEnabled = !_is24HourFormat;
+            itemAmPm.Click += (s, e) =>
+            {
+                ShowAmPm = itemAmPm.IsChecked;
             };
 
             MenuItem itemDate = new MenuItem { Header = "Mostrar Fecha" };
@@ -647,6 +768,7 @@ namespace WidgUI
             cm.Items.Add(itemVariants);
             cm.Items.Add(new Separator());
             cm.Items.Add(itemFormat);
+            cm.Items.Add(itemAmPm);
             cm.Items.Add(itemDate);
             cm.Items.Add(itemLock);
             cm.Items.Add(new Separator());
@@ -657,12 +779,23 @@ namespace WidgUI
 
         private void UpdateContextMenuChecks(MenuItem variantsParent)
         {
-            if (variantsParent.Items.Count >= 4)
+            WidgetStyleVariant[] variants =
             {
-                ((MenuItem)variantsParent.Items[0]).IsChecked = (_currentVariant == WidgetStyleVariant.MinimalistVertical);
-                ((MenuItem)variantsParent.Items[1]).IsChecked = (_currentVariant == WidgetStyleVariant.GlassmorphismCard);
-                ((MenuItem)variantsParent.Items[2]).IsChecked = (_currentVariant == WidgetStyleVariant.NeumorphismDark);
-                ((MenuItem)variantsParent.Items[3]).IsChecked = (_currentVariant == WidgetStyleVariant.HorizontalCompact);
+                WidgetStyleVariant.MinimalistVertical,
+                WidgetStyleVariant.GlassmorphismCard,
+                WidgetStyleVariant.NeumorphismDark,
+                WidgetStyleVariant.HorizontalCompact,
+                WidgetStyleVariant.OutlineHorizontal,
+                WidgetStyleVariant.StackedMono
+            };
+
+            for (int i = 0; i < variants.Length && i < variantsParent.Items.Count; i++)
+            {
+                MenuItem item = variantsParent.Items[i] as MenuItem;
+                if (item != null)
+                {
+                    item.IsChecked = _currentVariant == variants[i];
+                }
             }
         }
 
@@ -673,6 +806,7 @@ namespace WidgUI
                 Visible = this.IsVisible,
                 StyleVariant = (int)_currentVariant,
                 Is24HourFormat = _is24HourFormat,
+                ShowAmPm = _showAmPm,
                 ShowDate = _showDate,
                 IsLocked = _isLocked,
                 Left = this.Left,
@@ -695,6 +829,7 @@ namespace WidgUI
             }
 
             Is24HourFormat = data.Is24HourFormat;
+            ShowAmPm = data.ShowAmPm;
             ShowDate = data.ShowDate;
             IsLocked = data.IsLocked;
             this.Left = data.Left;

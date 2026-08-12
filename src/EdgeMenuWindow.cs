@@ -71,6 +71,7 @@ namespace WidgUI
 
         // Settings items
         private Border _toggle24h;
+        private Border _toggleAmPm;
         private Border _toggleDate;
         private Border _toggleLock;
 
@@ -79,6 +80,8 @@ namespace WidgUI
         private Border _styleBtnGlass;
         private Border _styleBtnNeu;
         private Border _styleBtnCompact;
+        private Border _styleBtnOutline;
+        private Border _styleBtnStacked;
 
         // Active state
         private string _activeSubPanel = null;
@@ -462,6 +465,7 @@ namespace WidgUI
             Grid grid = new Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -484,6 +488,16 @@ namespace WidgUI
             Grid.SetRow(_styleBtnCompact, 1);
             Grid.SetColumn(_styleBtnCompact, 1);
             grid.Children.Add(_styleBtnCompact);
+
+            _styleBtnOutline = CreateStyleButton("Contorno", WidgetStyleVariant.OutlineHorizontal);
+            Grid.SetRow(_styleBtnOutline, 2);
+            Grid.SetColumn(_styleBtnOutline, 0);
+            grid.Children.Add(_styleBtnOutline);
+
+            _styleBtnStacked = CreateStyleButton("Apilado", WidgetStyleVariant.StackedMono);
+            Grid.SetRow(_styleBtnStacked, 2);
+            Grid.SetColumn(_styleBtnStacked, 1);
+            grid.Children.Add(_styleBtnStacked);
 
             _stylePanel.Children.Add(grid);
         }
@@ -537,6 +551,8 @@ namespace WidgUI
             UpdateStyleButtonVisual(_styleBtnGlass, WidgetStyleVariant.GlassmorphismCard);
             UpdateStyleButtonVisual(_styleBtnNeu, WidgetStyleVariant.NeumorphismDark);
             UpdateStyleButtonVisual(_styleBtnCompact, WidgetStyleVariant.HorizontalCompact);
+            UpdateStyleButtonVisual(_styleBtnOutline, WidgetStyleVariant.OutlineHorizontal);
+            UpdateStyleButtonVisual(_styleBtnStacked, WidgetStyleVariant.StackedMono);
         }
 
         private void UpdateStyleButtonVisual(Border btn, WidgetStyleVariant variant)
@@ -566,6 +582,7 @@ namespace WidgUI
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -581,10 +598,16 @@ namespace WidgUI
             Grid.SetColumn(_toggleDate, 1);
             grid.Children.Add(_toggleDate);
 
+            // AM/PM Toggle
+            _toggleAmPm = CreateSettingToggleButton("Mostrar AM/PM", () => _mainWindow.ShowAmPm, (v) => _mainWindow.ShowAmPm = v);
+            Grid.SetRow(_toggleAmPm, 1);
+            Grid.SetColumn(_toggleAmPm, 0);
+            grid.Children.Add(_toggleAmPm);
+
             // Lock Toggle
             _toggleLock = CreateSettingToggleButton("Bloquear", () => _mainWindow.IsLocked, (v) => _mainWindow.IsLocked = v);
             Grid.SetRow(_toggleLock, 1);
-            Grid.SetColumn(_toggleLock, 0);
+            Grid.SetColumn(_toggleLock, 1);
             grid.Children.Add(_toggleLock);
 
             // Close App Button (Red)
@@ -612,12 +635,13 @@ namespace WidgUI
             btnExit.MouseLeave += (s, e) => btnExit.Background = new SolidColorBrush(Color.FromRgb(239, 68, 68));
             btnExit.MouseLeftButtonDown += (s, e) => Application.Current.Shutdown();
 
-            Grid.SetRow(btnExit, 1);
-            Grid.SetColumn(btnExit, 1);
+            Grid.SetRow(btnExit, 2);
+            Grid.SetColumn(btnExit, 0);
+            Grid.SetColumnSpan(btnExit, 2);
             grid.Children.Add(btnExit);
 
             Border btnProfiles = CreateProfileMenuButton("Mis diseños", () => ShowSubPanel("profiles"));
-            Grid.SetRow(btnProfiles, 2);
+            Grid.SetRow(btnProfiles, 3);
             Grid.SetColumn(btnProfiles, 0);
             Grid.SetColumnSpan(btnProfiles, 2);
             grid.Children.Add(btnProfiles);
@@ -708,7 +732,14 @@ namespace WidgUI
         {
             UpdateToggleButtonVisual(_toggle24h, _mainWindow.Is24HourFormat);
             UpdateToggleButtonVisual(_toggleDate, _mainWindow.ShowDate);
+            UpdateToggleButtonVisual(_toggleAmPm, _mainWindow.ShowAmPm && !_mainWindow.Is24HourFormat);
             UpdateToggleButtonVisual(_toggleLock, _mainWindow.IsLocked);
+
+            if (_toggleAmPm != null)
+            {
+                _toggleAmPm.Opacity = _mainWindow.Is24HourFormat ? 0.45 : 1;
+                _toggleAmPm.IsHitTestVisible = !_mainWindow.Is24HourFormat;
+            }
         }
 
         private void UpdateToggleButtonVisual(Border btn, bool isActive)

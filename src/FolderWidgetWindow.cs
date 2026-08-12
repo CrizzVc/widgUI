@@ -46,7 +46,7 @@ namespace WidgUI
         private const int ExpandedGridRows = 3;
         
         private Grid _pagerPanel;
-        private TextBlock _pageIndicator;
+        private StackPanel _pageDotsPanel;
         private int _currentPage;
         
         private class ShortcutData 
@@ -248,22 +248,19 @@ namespace WidgUI
             pager.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             Border prevButton = CreatePagerButton("\uE76B", () => GoToPage(_currentPage - 1));
-            _pageIndicator = new TextBlock
+            _pageDotsPanel = new StackPanel
             {
-                Text = "1 / 1",
-                Foreground = new SolidColorBrush(Color.FromRgb(70, 80, 95)),
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
+                Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Border nextButton = CreatePagerButton("\uE76C", () => GoToPage(_currentPage + 1));
 
             Grid.SetColumn(prevButton, 0);
-            Grid.SetColumn(_pageIndicator, 1);
+            Grid.SetColumn(_pageDotsPanel, 1);
             Grid.SetColumn(nextButton, 2);
             pager.Children.Add(prevButton);
-            pager.Children.Add(_pageIndicator);
+            pager.Children.Add(_pageDotsPanel);
             pager.Children.Add(nextButton);
             return pager;
         }
@@ -319,7 +316,7 @@ namespace WidgUI
 
         private void UpdatePager()
         {
-            if (_pagerPanel == null || _pageIndicator == null)
+            if (_pagerPanel == null || _pageDotsPanel == null)
             {
                 return;
             }
@@ -328,10 +325,50 @@ namespace WidgUI
             bool showPager = _isExpanded && totalPages > 1;
             _pagerPanel.Visibility = showPager ? Visibility.Visible : Visibility.Collapsed;
 
-            if (showPager)
+            _pageDotsPanel.Children.Clear();
+            if (!showPager)
             {
-                _pageIndicator.Text = string.Format("{0} / {1}", _currentPage + 1, totalPages);
+                return;
             }
+
+            for (int i = 0; i < totalPages; i++)
+            {
+                bool isCurrent = i == _currentPage;
+                bool isAdjacent = Math.Abs(i - _currentPage) == 1;
+
+                Ellipse dot = new Ellipse
+                {
+                    Width = isCurrent ? 7 : 6,
+                    Height = isCurrent ? 7 : 6,
+                    Margin = new Thickness(4, 0, 4, 0),
+                    Fill = new SolidColorBrush(GetPageDotColor(isCurrent, isAdjacent)),
+                    Cursor = Cursors.Hand
+                };
+
+                int pageIndex = i;
+                dot.MouseLeftButtonDown += (s, e) =>
+                {
+                    e.Handled = true;
+                    GoToPage(pageIndex);
+                };
+
+                _pageDotsPanel.Children.Add(dot);
+            }
+        }
+
+        private static Color GetPageDotColor(bool isCurrent, bool isAdjacent)
+        {
+            if (isCurrent)
+            {
+                return Color.FromArgb(245, 255, 255, 255);
+            }
+
+            if (isAdjacent)
+            {
+                return Color.FromArgb(115, 255, 255, 255);
+            }
+
+            return Color.FromArgb(70, 255, 255, 255);
         }
 
         private void AddShortcutData(string filePath)
