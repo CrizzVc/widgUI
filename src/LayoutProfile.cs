@@ -31,12 +31,20 @@ namespace WidgUI
         [DataMember(Name = "musicWidgets")]
         public List<MusicWidgetLayoutData> MusicWidgets { get; set; }
 
+        [DataMember(Name = "dockWidgets")]
+        public List<DockWidgetLayoutData> DockWidgets { get; set; }
+
+        [DataMember(Name = "customClockWidgets")]
+        public List<CustomClockWidgetLayoutData> CustomClockWidgets { get; set; }
+
         public LayoutProfile()
         {
             Version = 1;
             FolderWidgets = new List<FolderWidgetLayoutData>();
             ImageWidgets = new List<ImageWidgetLayoutData>();
             MusicWidgets = new List<MusicWidgetLayoutData>();
+            DockWidgets = new List<DockWidgetLayoutData>();
+            CustomClockWidgets = new List<CustomClockWidgetLayoutData>();
         }
     }
 
@@ -156,5 +164,77 @@ namespace WidgUI
 
         [DataMember(Name = "height")]
         public double Height { get; set; }
+    }
+
+    [DataContract]
+    public class DockWidgetLayoutData
+    {
+        [DataMember(Name = "id")]
+        public string Id { get; set; }
+
+        [DataMember(Name = "isLocked")]
+        public bool IsLocked { get; set; }
+
+        [DataMember(Name = "left")]
+        public double Left { get; set; }
+
+        [DataMember(Name = "top")]
+        public double Top { get; set; }
+
+        [DataMember(Name = "iconSize")]
+        public double IconSize { get; set; }
+
+        [DataMember(Name = "shortcuts")]
+        public List<string> Shortcuts { get; set; }
+
+        public DockWidgetLayoutData()
+        {
+            Shortcuts = new List<string>();
+            IconSize = 48.0;
+        }
+    }
+
+    [DataContract]
+    public class CustomClockWidgetLayoutData
+    {
+        [DataMember(Name = "id")]
+        public string Id { get; set; }
+
+        [DataMember(Name = "isLocked")]
+        public bool IsLocked { get; set; }
+
+        [DataMember(Name = "left")]
+        public double Left { get; set; }
+
+        [DataMember(Name = "top")]
+        public double Top { get; set; }
+
+        [DataMember(Name = "fontFamily")]
+        public string FontFamily { get; set; }
+
+        [DataMember(Name = "fontSize")]
+        public double FontSize { get; set; }
+
+        [DataMember(Name = "fontStyle")]
+        public string FontStyle { get; set; }
+
+        [DataMember(Name = "fontWeight")]
+        public string FontWeight { get; set; }
+
+        [DataMember(Name = "isVertical")]
+        public bool IsVertical { get; set; }
+
+        [DataMember(Name = "showAmPm")]
+        public bool ShowAmPm { get; set; }
+
+        public CustomClockWidgetLayoutData()
+        {
+            FontFamily = "Segoe UI";
+            FontSize = 48.0;
+            FontStyle = "Normal";
+            FontWeight = "Normal";
+            IsVertical = false;
+            ShowAmPm = true;
+        }
     }
 }

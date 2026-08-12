@@ -13,6 +13,8 @@ namespace WidgUI
         private static readonly List<FolderWidgetWindow> _folderWidgets = new List<FolderWidgetWindow>();
         private static readonly List<ImageWidgetWindow> _imageWidgets = new List<ImageWidgetWindow>();
         private static readonly List<MusicWidgetWindow> _musicWidgets = new List<MusicWidgetWindow>();
+        private static readonly List<DockWidgetWindow> _dockWidgets = new List<DockWidgetWindow>();
+        private static readonly List<CustomClockWidgetWindow> _customClockWidgets = new List<CustomClockWidgetWindow>();
 
         public static void Initialize(MainWindow clock, EdgeMenuWindow edgeMenu)
         {
@@ -42,6 +44,8 @@ namespace WidgUI
             stack.AddRange(_folderWidgets);
             stack.AddRange(_imageWidgets);
             stack.AddRange(_musicWidgets);
+            stack.AddRange(_dockWidgets);
+            stack.AddRange(_customClockWidgets);
             stack.Add(_edgeMenu);
 
             DesktopManager.StackWindows(stack);
@@ -56,7 +60,9 @@ namespace WidgUI
                 Wallpaper = _edgeMenu != null ? _edgeMenu.ToWallpaperLayoutData() : new WallpaperLayoutData(),
                 FolderWidgets = _folderWidgets.Select(w => w.ToLayoutData()).ToList(),
                 ImageWidgets = _imageWidgets.Select(w => w.ToLayoutData()).ToList(),
-                MusicWidgets = _musicWidgets.Select(w => w.ToLayoutData()).ToList()
+                MusicWidgets = _musicWidgets.Select(w => w.ToLayoutData()).ToList(),
+                DockWidgets = _dockWidgets.Select(w => w.ToLayoutData()).ToList(),
+                CustomClockWidgets = _customClockWidgets.Select(w => w.ToLayoutData()).ToList()
             };
 
             return profile;
@@ -102,6 +108,22 @@ namespace WidgUI
                 foreach (MusicWidgetLayoutData data in profile.MusicWidgets)
                 {
                     OpenMusicWidget(data);
+                }
+            }
+
+            if (profile.DockWidgets != null)
+            {
+                foreach (DockWidgetLayoutData data in profile.DockWidgets)
+                {
+                    OpenDockWidget(data);
+                }
+            }
+
+            if (profile.CustomClockWidgets != null)
+            {
+                foreach (CustomClockWidgetLayoutData data in profile.CustomClockWidgets)
+                {
+                    OpenCustomClockWidget(data);
                 }
             }
 
@@ -163,6 +185,28 @@ namespace WidgUI
             return widget;
         }
 
+        public static DockWidgetWindow OpenDockWidget(DockWidgetLayoutData data = null)
+        {
+            DockWidgetWindow widget = data != null
+                ? new DockWidgetWindow(data)
+                : new DockWidgetWindow();
+
+            RegisterDockWidget(widget);
+            widget.Show();
+            return widget;
+        }
+
+        public static CustomClockWidgetWindow OpenCustomClockWidget(CustomClockWidgetLayoutData data = null)
+        {
+            CustomClockWidgetWindow widget = data != null
+                ? new CustomClockWidgetWindow(data)
+                : new CustomClockWidgetWindow();
+
+            RegisterCustomClockWidget(widget);
+            widget.Show();
+            return widget;
+        }
+
         public static void RegisterFolderWidget(FolderWidgetWindow widget)
         {
             if (widget == null || _folderWidgets.Contains(widget))
@@ -196,6 +240,30 @@ namespace WidgUI
 
             _musicWidgets.Add(widget);
             widget.Closed += MusicWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
+        }
+
+        public static void RegisterDockWidget(DockWidgetWindow widget)
+        {
+            if (widget == null || _dockWidgets.Contains(widget))
+            {
+                return;
+            }
+
+            _dockWidgets.Add(widget);
+            widget.Closed += DockWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
+        }
+
+        public static void RegisterCustomClockWidget(CustomClockWidgetWindow widget)
+        {
+            if (widget == null || _customClockWidgets.Contains(widget))
+            {
+                return;
+            }
+
+            _customClockWidgets.Add(widget);
+            widget.Closed += CustomClockWidget_Closed;
             widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
         }
 
@@ -240,6 +308,30 @@ namespace WidgUI
             _musicWidgets.Remove(widget);
         }
 
+        private static void DockWidget_Closed(object sender, EventArgs e)
+        {
+            DockWidgetWindow widget = sender as DockWidgetWindow;
+            if (widget == null)
+            {
+                return;
+            }
+
+            widget.Closed -= DockWidget_Closed;
+            _dockWidgets.Remove(widget);
+        }
+
+        private static void CustomClockWidget_Closed(object sender, EventArgs e)
+        {
+            CustomClockWidgetWindow widget = sender as CustomClockWidgetWindow;
+            if (widget == null)
+            {
+                return;
+            }
+
+            widget.Closed -= CustomClockWidget_Closed;
+            _customClockWidgets.Remove(widget);
+        }
+
         private static void CloseSecondaryWidgets()
         {
             foreach (FolderWidgetWindow widget in _folderWidgets.ToList())
@@ -262,6 +354,20 @@ namespace WidgUI
                 widget.Close();
             }
             _musicWidgets.Clear();
+
+            foreach (DockWidgetWindow widget in _dockWidgets.ToList())
+            {
+                widget.Closed -= DockWidget_Closed;
+                widget.Close();
+            }
+            _dockWidgets.Clear();
+
+            foreach (CustomClockWidgetWindow widget in _customClockWidgets.ToList())
+            {
+                widget.Closed -= CustomClockWidget_Closed;
+                widget.Close();
+            }
+            _customClockWidgets.Clear();
         }
     }
 }

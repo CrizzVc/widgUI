@@ -1575,6 +1575,16 @@ namespace WidgUI
                 WidgetRegistry.OpenFolderWidget();
                 return false;
             }));
+            grid.Children.Add(CreateWidgetItem("Dock", "\uE82D", false, () =>
+            {
+                WidgetRegistry.OpenDockWidget();
+                return false;
+            }));
+            grid.Children.Add(CreateWidgetItem("Reloj Extra", "\uE916", false, () =>
+            {
+                WidgetRegistry.OpenCustomClockWidget();
+                return false;
+            }));
             grid.Children.Add(CreateWidgetItem("Clima", "\uE706", false, null));
             grid.Children.Add(CreateWidgetItem("Sistema", "\uE90F", false, null));
             grid.Children.Add(CreateWidgetItem("Música", "\uE8D6", false, () =>
