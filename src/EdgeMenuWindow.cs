@@ -1726,6 +1726,11 @@ namespace WidgUI
                 WidgetRegistry.OpenAppWidget();
                 return false;
             }));
+            grid.Children.Add(CreateWidgetItem("Carpeta amplia", "\uE8B7", false, () =>
+            {
+                WidgetRegistry.OpenExpandedFolderWidget();
+                return false;
+            }));
             grid.Children.Add(CreateWidgetItem("Calendario", "\uE787", false, null));
 
             scrollViewer.Content = grid;

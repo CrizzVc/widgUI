@@ -16,6 +16,7 @@ namespace WidgUI
         private static readonly List<DockWidgetWindow> _dockWidgets = new List<DockWidgetWindow>();
         private static readonly List<CustomClockWidgetWindow> _customClockWidgets = new List<CustomClockWidgetWindow>();
         private static readonly List<AppWidgetWindow> _appWidgets = new List<AppWidgetWindow>();
+        private static readonly List<ExpandedFolderWidgetWindow> _expandedFolderWidgets = new List<ExpandedFolderWidgetWindow>();
 
         public static void Initialize(MainWindow clock, EdgeMenuWindow edgeMenu)
         {
@@ -48,6 +49,7 @@ namespace WidgUI
             stack.AddRange(_dockWidgets);
             stack.AddRange(_customClockWidgets);
             stack.AddRange(_appWidgets);
+            stack.AddRange(_expandedFolderWidgets);
             stack.Add(_edgeMenu);
 
             DesktopManager.StackWindows(stack);
@@ -65,7 +67,8 @@ namespace WidgUI
                 MusicWidgets = _musicWidgets.Select(w => w.ToLayoutData()).ToList(),
                 DockWidgets = _dockWidgets.Select(w => w.ToLayoutData()).ToList(),
                 CustomClockWidgets = _customClockWidgets.Select(w => w.ToLayoutData()).ToList(),
-                AppWidgets = _appWidgets.Select(w => w.ToLayoutData()).ToList()
+                AppWidgets = _appWidgets.Select(w => w.ToLayoutData()).ToList(),
+                ExpandedFolderWidgets = _expandedFolderWidgets.Select(w => w.ToLayoutData()).ToList()
             };
 
             return profile;
@@ -135,6 +138,14 @@ namespace WidgUI
                 foreach (AppWidgetLayoutData data in profile.AppWidgets)
                 {
                     OpenAppWidget(data);
+                }
+            }
+
+            if (profile.ExpandedFolderWidgets != null)
+            {
+                foreach (ExpandedFolderWidgetLayoutData data in profile.ExpandedFolderWidgets)
+                {
+                    OpenExpandedFolderWidget(data);
                 }
             }
 
@@ -260,6 +271,17 @@ namespace WidgUI
             return widget;
         }
 
+        public static ExpandedFolderWidgetWindow OpenExpandedFolderWidget(ExpandedFolderWidgetLayoutData data = null)
+        {
+            ExpandedFolderWidgetWindow widget = data != null
+                ? new ExpandedFolderWidgetWindow(data)
+                : new ExpandedFolderWidgetWindow();
+
+            RegisterExpandedFolderWidget(widget);
+            widget.Show();
+            return widget;
+        }
+
         public static void RegisterFolderWidget(FolderWidgetWindow widget)
         {
             if (widget == null || _folderWidgets.Contains(widget))
@@ -329,6 +351,18 @@ namespace WidgUI
 
             _appWidgets.Add(widget);
             widget.Closed += AppWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
+        }
+
+        public static void RegisterExpandedFolderWidget(ExpandedFolderWidgetWindow widget)
+        {
+            if (widget == null || _expandedFolderWidgets.Contains(widget))
+            {
+                return;
+            }
+
+            _expandedFolderWidgets.Add(widget);
+            widget.Closed += ExpandedFolderWidget_Closed;
             widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
         }
 
@@ -409,6 +443,18 @@ namespace WidgUI
             _appWidgets.Remove(widget);
         }
 
+        private static void ExpandedFolderWidget_Closed(object sender, EventArgs e)
+        {
+            ExpandedFolderWidgetWindow widget = sender as ExpandedFolderWidgetWindow;
+            if (widget == null)
+            {
+                return;
+            }
+
+            widget.Closed -= ExpandedFolderWidget_Closed;
+            _expandedFolderWidgets.Remove(widget);
+        }
+
         private static void CloseSecondaryWidgets()
         {
             foreach (FolderWidgetWindow widget in _folderWidgets.ToList())
@@ -452,6 +498,13 @@ namespace WidgUI
                 widget.Close();
             }
             _appWidgets.Clear();
+
+            foreach (ExpandedFolderWidgetWindow widget in _expandedFolderWidgets.ToList())
+            {
+                widget.Closed -= ExpandedFolderWidget_Closed;
+                widget.Close();
+            }
+            _expandedFolderWidgets.Clear();
         }
     }
 }

@@ -40,6 +40,9 @@ namespace WidgUI
         [DataMember(Name = "appWidgets")]
         public List<AppWidgetLayoutData> AppWidgets { get; set; }
 
+        [DataMember(Name = "expandedFolderWidgets")]
+        public List<ExpandedFolderWidgetLayoutData> ExpandedFolderWidgets { get; set; }
+
         public LayoutProfile()
         {
             Version = 1;
@@ -49,6 +52,7 @@ namespace WidgUI
             DockWidgets = new List<DockWidgetLayoutData>();
             CustomClockWidgets = new List<CustomClockWidgetLayoutData>();
             AppWidgets = new List<AppWidgetLayoutData>();
+            ExpandedFolderWidgets = new List<ExpandedFolderWidgetLayoutData>();
         }
     }
 
@@ -307,6 +311,40 @@ namespace WidgUI
         public bool? ShowWhiteBackground { get; set; }
         public AppWidgetLayoutData()
         {
+            Opacity = WidgetAppearanceHelper.DefaultOpacity;
+        }
+    }
+
+    [DataContract]
+    public class ExpandedFolderWidgetLayoutData
+    {
+        [DataMember(Name = "id")]
+        public string Id { get; set; }
+
+        [DataMember(Name = "isLocked")]
+        public bool IsLocked { get; set; }
+
+        [DataMember(Name = "left")]
+        public double Left { get; set; }
+
+        [DataMember(Name = "top")]
+        public double Top { get; set; }
+
+        [DataMember(Name = "shortcuts")]
+        public List<string> Shortcuts { get; set; }
+
+        [DataMember(Name = "themeMode")]
+        public int ThemeMode { get; set; }
+
+        [DataMember(Name = "adaptToBackground")]
+        public bool AdaptToBackground { get; set; }
+
+        [DataMember(Name = "opacity")]
+        public double Opacity { get; set; }
+
+        public ExpandedFolderWidgetLayoutData()
+        {
+            Shortcuts = new List<string>();
             Opacity = WidgetAppearanceHelper.DefaultOpacity;
         }
     }
