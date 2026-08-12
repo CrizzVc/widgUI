@@ -20,7 +20,8 @@ namespace WidgUI
         Compact,
         IosPanel,
         Material,
-        Transparent
+        Transparent,
+        SpotifyTile
     }
 
     public class MusicWidgetWindow : Window
@@ -230,6 +231,10 @@ namespace WidgUI
                     SetWidgetSize(280, 84);
                     BuildTransparentUI();
                     break;
+                case MusicWidgetVariant.SpotifyTile:
+                    SetWidgetSize(200, 200);
+                    BuildSpotifyTileUI();
+                    break;
                 default:
                     SetWidgetSize(380, 162);
                     BuildControlCenterUI();
@@ -273,6 +278,12 @@ namespace WidgUI
                     _minHeight = 64;
                     _maxWidth = 600;
                     _maxHeight = 150;
+                    break;
+                case MusicWidgetVariant.SpotifyTile:
+                    _minWidth = 160;
+                    _minHeight = 160;
+                    _maxWidth = 320;
+                    _maxHeight = 320;
                     break;
                 default:
                     _minWidth = 280;
@@ -1257,6 +1268,176 @@ namespace WidgUI
             FinishResizableLayout(_cardBorder);
         }
 
+        private void BuildSpotifyTileUI()
+        {
+            _materialProgressFillHost = null;
+            _materialWavePath = null;
+
+            const double tileRadius = 32;
+            Color spotifyRed = Color.FromRgb(209, 51, 62);
+
+            _cardBorder = CreateCardShell(tileRadius, new Thickness(14), new Thickness(0));
+            _cardBorder.Background = new SolidColorBrush(spotifyRed);
+
+            Grid content = new Grid();
+            content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border albumArt = CreateAlbumArtBorder(74, 10);
+            albumArt.HorizontalAlignment = HorizontalAlignment.Left;
+            albumArt.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetRow(albumArt, 0);
+            Grid.SetColumn(albumArt, 0);
+            content.Children.Add(albumArt);
+
+            Border spotifyBadge = CreateSpotifyBadge(30);
+            spotifyBadge.HorizontalAlignment = HorizontalAlignment.Right;
+            spotifyBadge.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetRow(spotifyBadge, 0);
+            Grid.SetColumn(spotifyBadge, 1);
+            content.Children.Add(spotifyBadge);
+
+            StackPanel textPanel = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+            _titleText = new TextBlock
+            {
+                Text = "Sin reproduccion",
+                FontSize = 11.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            _artistText = new TextBlock
+            {
+                Text = "Artista",
+                FontSize = 9.5,
+                Foreground = new SolidColorBrush(Color.FromArgb(190, 255, 255, 255)),
+                Margin = new Thickness(0, 2, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Visibility = Visibility.Collapsed
+            };
+            textPanel.Children.Add(_titleText);
+            textPanel.Children.Add(_artistText);
+            Grid.SetRow(textPanel, 1);
+            Grid.SetColumn(textPanel, 0);
+            content.Children.Add(textPanel);
+
+            _playPauseButton = CreateSpotifyPlayButton(54, spotifyRed);
+            _playPauseButton.HorizontalAlignment = HorizontalAlignment.Right;
+            _playPauseButton.VerticalAlignment = VerticalAlignment.Bottom;
+            Grid.SetRow(_playPauseButton, 1);
+            Grid.SetColumn(_playPauseButton, 1);
+            content.Children.Add(_playPauseButton);
+
+            _equalizerPanel = null;
+            _avatarImage = null;
+            _backgroundArtImage = null;
+            _elapsedText = null;
+            _remainingText = null;
+            _progressTrack = null;
+            _progressFill = null;
+            _progressScrubber = null;
+            _prevButton = null;
+            _nextButton = null;
+            _outputIcon = null;
+
+            _cardBorder.Child = content;
+            FinishResizableLayout(_cardBorder);
+        }
+
+        private static Border CreateSpotifyBadge(double size)
+        {
+            Border badge = new Border
+            {
+                Width = size,
+                Height = size,
+                CornerRadius = new CornerRadius(size / 2),
+                Background = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+
+            Canvas logoCanvas = new Canvas
+            {
+                Width = size,
+                Height = size
+            };
+
+            SolidColorBrush logoBrush = new SolidColorBrush(Color.FromRgb(29, 185, 84));
+            Path arc1 = new Path
+            {
+                Data = Geometry.Parse("M 8.5,17.5 A 9,9 0 0 1 21.5,17.5"),
+                Stroke = logoBrush,
+                StrokeThickness = 2.2,
+                StrokeStartLineCap = PenLineCap.Round
+            };
+            Path arc2 = new Path
+            {
+                Data = Geometry.Parse("M 10,14 A 6.5,6.5 0 0 1 20,14"),
+                Stroke = logoBrush,
+                StrokeThickness = 2.2,
+                StrokeStartLineCap = PenLineCap.Round
+            };
+            Path arc3 = new Path
+            {
+                Data = Geometry.Parse("M 11.5,10.5 A 4,4 0 0 1 18.5,10.5"),
+                Stroke = logoBrush,
+                StrokeThickness = 2.2,
+                StrokeStartLineCap = PenLineCap.Round
+            };
+
+            logoCanvas.Children.Add(arc1);
+            logoCanvas.Children.Add(arc2);
+            logoCanvas.Children.Add(arc3);
+            badge.Child = logoCanvas;
+            return badge;
+        }
+
+        private Border CreateSpotifyPlayButton(double size, Color accentColor)
+        {
+            Border button = new Border
+            {
+                Width = size,
+                Height = size,
+                CornerRadius = new CornerRadius(size / 2),
+                Background = Brushes.White,
+                Cursor = Cursors.Hand
+            };
+
+            Path path = new Path
+            {
+                Data = CreateTransportIconGeometry(TransportIconKind.Play),
+                Fill = new SolidColorBrush(accentColor),
+                Stretch = Stretch.Uniform
+            };
+
+            button.Tag = path;
+            button.Child = new Viewbox
+            {
+                Width = size * 0.38,
+                Height = size * 0.38,
+                Margin = new Thickness(size * 0.04, 0, 0, 0),
+                Child = path
+            };
+
+            button.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                if (_mediaHelper != null)
+                {
+                    _mediaHelper.TogglePlayPause();
+                }
+            };
+
+            return button;
+        }
+
         private Border CreateMaterialPlayButton(double size)
         {
             Border button = new Border
@@ -1909,7 +2090,8 @@ namespace WidgUI
                 if (_remainingText != null) _remainingText.Text = "-:--";
             }
 
-            if (_currentVariant == MusicWidgetVariant.IosPanel || _currentVariant == MusicWidgetVariant.Transparent)
+            if (_currentVariant == MusicWidgetVariant.IosPanel || _currentVariant == MusicWidgetVariant.Transparent
+                || _currentVariant == MusicWidgetVariant.SpotifyTile)
             {
                 if (_artistText != null)
                 {
@@ -2129,7 +2311,11 @@ namespace WidgUI
             {
                 _nextButton.Opacity = state.CanSkipNext ? 1 : 0.35;
             }
-            _progressTrack.Cursor = state.CanSeek ? Cursors.Hand : Cursors.Arrow;
+
+            if (_progressTrack != null)
+            {
+                _progressTrack.Cursor = state.CanSeek ? Cursors.Hand : Cursors.Arrow;
+            }
         }
 
         private static string FormatTime(TimeSpan time)
@@ -2158,6 +2344,7 @@ namespace WidgUI
             itemVariants.Items.Add(CreateVariantMenuItem("Panel iOS", MusicWidgetVariant.IosPanel));
             itemVariants.Items.Add(CreateVariantMenuItem("Material", MusicWidgetVariant.Material));
             itemVariants.Items.Add(CreateVariantMenuItem("Sin fondo", MusicWidgetVariant.Transparent));
+            itemVariants.Items.Add(CreateVariantMenuItem("Tarjeta Spotify", MusicWidgetVariant.SpotifyTile));
 
             MenuItem itemLock = new MenuItem { Header = "Bloquear posicion" };
             itemLock.IsCheckable = true;

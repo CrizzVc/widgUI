@@ -134,10 +134,14 @@ namespace WidgUI
         [DataMember(Name = "opacity")]
         public double Opacity { get; set; }
 
+        [DataMember(Name = "cornerRadius")]
+        public double CornerRadius { get; set; }
+
         public FolderWidgetLayoutData()
         {
             Shortcuts = new List<string>();
             Opacity = WidgetAppearanceHelper.DefaultOpacity;
+            CornerRadius = 30;
         }
     }
 

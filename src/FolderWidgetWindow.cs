@@ -60,6 +60,7 @@ namespace WidgUI
         private WidgetThemeMode _themeMode = WidgetThemeMode.Light;
         private bool _adaptToBackground = false;
         private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
+        private double _cornerRadius = 30;
         private WidgetAppearanceColors _appearanceColors;
         private TextBlock _dropText;
 
@@ -214,6 +215,25 @@ namespace WidgUI
             }
         }
 
+        private void ApplyCornerRadius()
+        {
+            if (_cardBorder != null)
+            {
+                _cardBorder.CornerRadius = new CornerRadius(_cornerRadius);
+            }
+
+            if (_dropOverlay != null)
+            {
+                _dropOverlay.CornerRadius = new CornerRadius(_cornerRadius);
+            }
+        }
+
+        private double GetItemCornerRadius()
+        {
+            double baseRadius = _isExpanded ? 18 : 14;
+            return Math.Max(4, _cornerRadius * baseRadius / 30.0);
+        }
+
         private void NotifyLayoutChanged()
         {
             WidgetRegistry.AutoSaveLayout();
@@ -228,7 +248,7 @@ namespace WidgUI
                 Background = new SolidColorBrush(Color.FromArgb(140, 240, 245, 255)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(30),
+                CornerRadius = new CornerRadius(_cornerRadius),
                 Padding = new Thickness(12)
             };
 
@@ -252,7 +272,7 @@ namespace WidgUI
             _dropOverlay = new Border
             {
                 Background = Brushes.Transparent,
-                CornerRadius = new CornerRadius(30),
+                CornerRadius = new CornerRadius(_cornerRadius),
                 Visibility = Visibility.Collapsed
             };
             TextBlock dropText = new TextBlock
@@ -604,7 +624,7 @@ namespace WidgUI
                 };
                 
                 // Animate border radius from large (collapsed) to slightly smaller (expanded)
-                AnimateCornerRadius(_cardBorder, new CornerRadius(30), new CornerRadius(24), moveDuration, moveEasing);
+                AnimateCornerRadius(_cardBorder, new CornerRadius(_cornerRadius), new CornerRadius(Math.Max(16, _cornerRadius - 6)), moveDuration, moveEasing);
                 
                 animW.Completed += (s, e) => { _isAnimating = false; };
                 
@@ -653,7 +673,7 @@ namespace WidgUI
                 };
                 
                 // Animate corner radius back
-                AnimateCornerRadius(_cardBorder, new CornerRadius(24), new CornerRadius(30), collapseDuration, collapseEasing);
+                AnimateCornerRadius(_cardBorder, new CornerRadius(Math.Max(16, _cornerRadius - 6)), new CornerRadius(_cornerRadius), collapseDuration, collapseEasing);
                 
                 animW.Completed += (s, e) =>
                 {
@@ -844,7 +864,7 @@ namespace WidgUI
             double itemSize = _isExpanded ? 60 : 46;
             double iconSize = itemSize;
             double itemMargin = _isExpanded ? 6 : 4;
-            double cornerRadius = _isExpanded ? 18 : 14;
+            double cornerRadius = GetItemCornerRadius();
             double fontSize = _isExpanded ? 22 : 18;
             
             if (_isExpanded)
@@ -864,110 +884,111 @@ namespace WidgUI
             }
             else
             {
-                for (int i = 0; i < count; i++)
+                if (count <= 4)
                 {
-                    if (i < 3)
+                    for (int i = 0; i < count; i++)
                     {
                         _iconsGrid.Children.Add(CreateAppShortcut(
                             _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
                             itemSize, iconSize, itemMargin, cornerRadius, fontSize));
                     }
-                    else if (i == 3)
+                }
+                else
+                {
+                    for (int i = 0; i < 3; i++)
                     {
-                        if (count == 4)
-                        {
-                            _iconsGrid.Children.Add(CreateAppShortcut(
-                                _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
-                                itemSize, iconSize, itemMargin, cornerRadius, fontSize));
-                        }
-                        else
-                        {
-                            int extra = count - 3;
-                            _iconsGrid.Children.Add(CreateMoreIndicator(extra, _shortcuts[i].IconSource,
-                                itemSize, iconSize, itemMargin, cornerRadius));
-                            break; 
-                        }
+                        _iconsGrid.Children.Add(CreateAppShortcut(
+                            _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
+                            itemSize, iconSize, itemMargin, cornerRadius, fontSize));
                     }
+
+                    _iconsGrid.Children.Add(CreateMiniGridFolderCell(
+                        3, itemSize, iconSize, itemMargin, cornerRadius));
                 }
             }
         }
 
-        private UIElement CreateMoreIndicator(int extraCount, ImageSource lastIconSource,
+        private UIElement CreateMiniGridFolderCell(int startIndex,
             double itemSize, double iconSize, double itemMargin, double cornerRadius)
         {
             Border appBorder = new Border
             {
                 Width = itemSize,
                 Height = itemSize,
-                Background = Brushes.White,
+                Background = Brushes.Transparent,
                 CornerRadius = new CornerRadius(cornerRadius),
                 Margin = new Thickness(itemMargin),
                 Cursor = Cursors.Hand,
-                ToolTip = string.Format("+{0} elementos adicionales", extraCount),
-                Effect = new DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    Direction = 270,
-                    ShadowDepth = 2,
-                    Opacity = 0.1,
-                    BlurRadius = 5
-                }
+                ToolTip = "Abrir carpeta"
             };
 
-            Grid grid = new Grid();
-
-            if (lastIconSource != null)
+            UniformGrid miniGrid = new UniformGrid
             {
-                System.Windows.Controls.Image img = new System.Windows.Controls.Image
+                Rows = 2,
+                Columns = 2,
+                Margin = new Thickness(4)
+            };
+
+            double miniCorner = Math.Max(2, cornerRadius * 0.45);
+            double miniIconSize = (itemSize - 12) / 2.0;
+
+            for (int i = 0; i < 4; i++)
+            {
+                int shortcutIndex = startIndex + i;
+                Border miniTile = new Border
                 {
-                    Source = lastIconSource,
-                    Stretch = Stretch.Uniform,
-                    Width = iconSize,
-                    Height = iconSize,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Opacity = 0.4,
-                    Clip = new RectangleGeometry(new Rect(0, 0, iconSize, iconSize), cornerRadius, cornerRadius)
+                    Background = Brushes.Transparent,
+                    CornerRadius = new CornerRadius(miniCorner),
+                    Margin = new Thickness(1.5),
+                    ClipToBounds = true
                 };
-                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
-                grid.Children.Add(img);
+
+                if (shortcutIndex < _shortcuts.Count && _shortcuts[shortcutIndex].IconSource != null)
+                {
+                    System.Windows.Controls.Image img = new System.Windows.Controls.Image
+                    {
+                        Source = _shortcuts[shortcutIndex].IconSource,
+                        Stretch = Stretch.Uniform,
+                        Width = miniIconSize,
+                        Height = miniIconSize,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Clip = new RectangleGeometry(new Rect(0, 0, miniIconSize, miniIconSize), miniCorner, miniCorner)
+                    };
+                    RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+                    miniTile.Child = img;
+                }
+
+                miniGrid.Children.Add(miniTile);
             }
 
-            Border overlay = new Border
+            Border darkenOverlay = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0)),
-                CornerRadius = new CornerRadius(cornerRadius)
+                Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+                CornerRadius = new CornerRadius(cornerRadius),
+                IsHitTestVisible = false
             };
-            grid.Children.Add(overlay);
 
-            TextBlock tb = new TextBlock
-            {
-                Text = string.Format("+{0}", extraCount),
-                FontSize = 14,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            grid.Children.Add(tb);
+            Grid container = new Grid();
+            container.Children.Add(miniGrid);
+            container.Children.Add(darkenOverlay);
+            appBorder.Child = container;
 
-            appBorder.Child = grid;
-            
             appBorder.MouseEnter += (s, e) =>
             {
-                overlay.Background = new SolidColorBrush(Color.FromArgb(160, 0, 0, 0));
+                darkenOverlay.Background = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0));
             };
             appBorder.MouseLeave += (s, e) =>
             {
-                overlay.Background = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0));
+                darkenOverlay.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
             };
-            
+
             appBorder.MouseLeftButtonDown += (s, e) =>
             {
                 e.Handled = true;
                 AnimateExpansion(true);
             };
-            
+
             return appBorder;
         }
 
@@ -1134,6 +1155,31 @@ namespace WidgUI
             appearanceMenu.Items.Add(adaptItem);
             appearanceMenu.Items.Add(opacityMenu);
             cm.Items.Add(appearanceMenu);
+
+            MenuItem radiusMenu = new MenuItem { Header = "Radio de esquinas" };
+            double[] radiusPresets = new double[] { 14, 24, 30, 40, 50 };
+            string[] radiusLabels = new string[] { "Suave", "Normal", "Redondeado", "Muy redondeado", "Squircle" };
+            for (int i = 0; i < radiusPresets.Length; i++)
+            {
+                double preset = radiusPresets[i];
+                string label = radiusLabels[i];
+                MenuItem radiusItem = new MenuItem
+                {
+                    Header = label + " (" + preset + "px)",
+                    IsCheckable = true,
+                    IsChecked = Math.Abs(_cornerRadius - preset) < 0.5
+                };
+                radiusItem.Click += (s, e) =>
+                {
+                    _cornerRadius = preset;
+                    ApplyCornerRadius();
+                    RenderShortcuts();
+                    SetupContextMenu();
+                    NotifyLayoutChanged();
+                };
+                radiusMenu.Items.Add(radiusItem);
+            }
+            cm.Items.Add(radiusMenu);
             cm.Items.Add(new Separator());
             
             MenuItem itemLock = new MenuItem { Header = "Bloquear Posición" };
@@ -1168,7 +1214,8 @@ namespace WidgUI
                 Top = this.Top,
                 ThemeMode = (int)_themeMode,
                 AdaptToBackground = _adaptToBackground,
-                Opacity = _opacity
+                Opacity = _opacity,
+                CornerRadius = _cornerRadius
             };
 
             foreach (ShortcutData shortcut in _shortcuts)
@@ -1209,6 +1256,11 @@ namespace WidgUI
                 _opacity = data.Opacity;
             }
 
+            if (data.CornerRadius > 0)
+            {
+                _cornerRadius = data.CornerRadius;
+            }
+
             _shortcuts.Clear();
             if (data.Shortcuts != null)
             {
@@ -1222,6 +1274,7 @@ namespace WidgUI
             }
 
             RenderShortcuts();
+            ApplyCornerRadius();
             ApplyAppearance();
             SetupContextMenu();
         }
