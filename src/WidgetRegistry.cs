@@ -133,15 +133,46 @@ namespace WidgUI
         public static void LoadLastProfileIfAvailable()
         {
             string lastProfileName = ProfileService.GetLastProfileName();
-            if (string.IsNullOrWhiteSpace(lastProfileName))
+            LayoutProfile profile = null;
+
+            if (!string.IsNullOrWhiteSpace(lastProfileName))
             {
-                return;
+                profile = ProfileService.LoadProfile(lastProfileName);
             }
 
-            LayoutProfile profile = ProfileService.LoadProfile(lastProfileName);
+            if (profile == null)
+            {
+                profile = ProfileService.LoadProfile(AutoSaveProfileName);
+            }
+
             if (profile != null)
             {
                 ApplyLayout(profile);
+            }
+        }
+
+        public const string AutoSaveProfileName = "__autosave";
+
+        public static string GetActiveWallpaperPath()
+        {
+            return _edgeMenu != null ? _edgeMenu.ActiveWallpaperPath : null;
+        }
+
+        public static void AutoSaveLayout()
+        {
+            try
+            {
+                string profileName = ProfileService.GetLastProfileName();
+                if (string.IsNullOrWhiteSpace(profileName))
+                {
+                    profileName = AutoSaveProfileName;
+                }
+
+                LayoutProfile profile = CaptureCurrentLayout(profileName);
+                ProfileService.SaveProfile(profile);
+            }
+            catch
+            {
             }
         }
 

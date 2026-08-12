@@ -1066,6 +1066,11 @@ namespace WidgUI
             catch {}
         }
 
+        public string ActiveWallpaperPath
+        {
+            get { return _activeWallpaperPath; }
+        }
+
         public WallpaperLayoutData ToWallpaperLayoutData()
         {
             return new WallpaperLayoutData

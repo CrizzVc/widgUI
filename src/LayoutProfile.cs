@@ -110,9 +110,19 @@ namespace WidgUI
         [DataMember(Name = "shortcuts")]
         public List<string> Shortcuts { get; set; }
 
+        [DataMember(Name = "themeMode")]
+        public int ThemeMode { get; set; }
+
+        [DataMember(Name = "adaptToBackground")]
+        public bool AdaptToBackground { get; set; }
+
+        [DataMember(Name = "opacity")]
+        public double Opacity { get; set; }
+
         public FolderWidgetLayoutData()
         {
             Shortcuts = new List<string>();
+            Opacity = WidgetAppearanceHelper.DefaultOpacity;
         }
     }
 
@@ -187,10 +197,20 @@ namespace WidgUI
         [DataMember(Name = "shortcuts")]
         public List<string> Shortcuts { get; set; }
 
+        [DataMember(Name = "themeMode")]
+        public int ThemeMode { get; set; }
+
+        [DataMember(Name = "adaptToBackground")]
+        public bool AdaptToBackground { get; set; }
+
+        [DataMember(Name = "opacity")]
+        public double Opacity { get; set; }
+
         public DockWidgetLayoutData()
         {
             Shortcuts = new List<string>();
             IconSize = 48.0;
+            Opacity = WidgetAppearanceHelper.DefaultOpacity;
         }
     }
 

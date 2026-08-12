@@ -7,7 +7,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Animation;
 using Microsoft.Win32;
@@ -20,6 +19,10 @@ namespace WidgUI
         private bool _embeddedInDesktop = true;
         private double _iconSize = 48.0;
         private string _widgetId;
+        private WidgetThemeMode _themeMode = WidgetThemeMode.Light;
+        private bool _adaptToBackground = false;
+        private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
+        private WidgetAppearanceColors _appearanceColors;
         
         private Border _cardBorder;
         private StackPanel _dockPanel;
@@ -52,8 +55,8 @@ namespace WidgUI
             }
             else
             {
-                // Add some default items so it's not empty and looks cool initially
                 AddDefaultItems();
+                NotifyLayoutChanged();
             }
 
             SetupContextMenu();
@@ -101,23 +104,16 @@ namespace WidgUI
 
         private void BuildUI()
         {
-            // Glassmorphic background
+            RefreshAppearanceColors();
+
             _cardBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(150, 240, 245, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                Background = new SolidColorBrush(_appearanceColors.Background),
+                BorderBrush = new SolidColorBrush(_appearanceColors.Border),
                 BorderThickness = new Thickness(1.5),
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(14, 8, 14, 8),
-                SnapsToDevicePixels = true,
-                Effect = new DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    Direction = 270,
-                    ShadowDepth = 6,
-                    Opacity = 0.25,
-                    BlurRadius = 18
-                }
+                SnapsToDevicePixels = true
             };
 
             _dockPanel = new StackPanel
@@ -188,7 +184,7 @@ namespace WidgUI
                 TextBlock placeholder = new TextBlock
                 {
                     Text = "Arrastra archivos aquí",
-                    Foreground = new SolidColorBrush(Color.FromArgb(180, 50, 50, 80)),
+                    Foreground = new SolidColorBrush(_appearanceColors.SecondaryForeground),
                     FontSize = 13,
                     FontWeight = FontWeights.Medium,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -269,7 +265,7 @@ namespace WidgUI
                     {
                         Width = 1,
                         Height = _iconSize * 0.5,
-                        Background = new SolidColorBrush(Color.FromArgb(50, 100, 100, 150)),
+                        Background = new SolidColorBrush(_appearanceColors.Separator),
                         VerticalAlignment = VerticalAlignment.Center,
                         Margin = new Thickness(4, 0, 4, 0)
                     };
@@ -303,6 +299,7 @@ namespace WidgUI
             {
                 _items.RemoveAt(index);
                 RenderDock();
+                NotifyLayoutChanged();
             };
             menu.Items.Add(removeItem);
 
@@ -312,6 +309,82 @@ namespace WidgUI
         private void SetupContextMenu()
         {
             ContextMenu menu = new ContextMenu();
+
+            MenuItem appearanceMenu = new MenuItem { Header = "Apariencia" };
+
+            MenuItem lightItem = new MenuItem
+            {
+                Header = "Modo claro",
+                IsCheckable = true,
+                IsChecked = _themeMode == WidgetThemeMode.Light && !_adaptToBackground
+            };
+            lightItem.Click += (s, e) =>
+            {
+                _themeMode = WidgetThemeMode.Light;
+                _adaptToBackground = false;
+                ApplyAppearance();
+                RenderDock();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
+            MenuItem darkItem = new MenuItem
+            {
+                Header = "Modo oscuro",
+                IsCheckable = true,
+                IsChecked = _themeMode == WidgetThemeMode.Dark && !_adaptToBackground
+            };
+            darkItem.Click += (s, e) =>
+            {
+                _themeMode = WidgetThemeMode.Dark;
+                _adaptToBackground = false;
+                ApplyAppearance();
+                RenderDock();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
+            MenuItem adaptItem = new MenuItem
+            {
+                Header = "Adaptar al fondo",
+                IsCheckable = true,
+                IsChecked = _adaptToBackground
+            };
+            adaptItem.Click += (s, e) =>
+            {
+                _adaptToBackground = adaptItem.IsChecked;
+                ApplyAppearance();
+                RenderDock();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
+            MenuItem opacityMenu = new MenuItem { Header = "Opacidad" };
+            foreach (double preset in WidgetAppearanceHelper.OpacityPresets)
+            {
+                MenuItem opacityItem = new MenuItem
+                {
+                    Header = preset + "%",
+                    IsCheckable = true,
+                    IsChecked = Math.Abs(_opacity - preset) < 0.5
+                };
+                double targetOpacity = preset;
+                opacityItem.Click += (s, e) =>
+                {
+                    _opacity = targetOpacity;
+                    ApplyAppearance();
+                    RenderDock();
+                    SetupContextMenu();
+                    NotifyLayoutChanged();
+                };
+                opacityMenu.Items.Add(opacityItem);
+            }
+
+            appearanceMenu.Items.Add(lightItem);
+            appearanceMenu.Items.Add(darkItem);
+            appearanceMenu.Items.Add(adaptItem);
+            appearanceMenu.Items.Add(opacityMenu);
+            menu.Items.Add(appearanceMenu);
 
             MenuItem addShortcut = new MenuItem { Header = "Añadir acceso directo..." };
             addShortcut.Click += (s, e) => AddShortcutDialog();
@@ -323,6 +396,7 @@ namespace WidgUI
             lockPos.Click += (s, e) =>
             {
                 _isLocked = lockPos.IsChecked;
+                NotifyLayoutChanged();
             };
             menu.Items.Add(lockPos);
 
@@ -336,7 +410,8 @@ namespace WidgUI
                 {
                     _iconSize = targetSz;
                     RenderDock();
-                    SetupContextMenu(); // refresh checkmarks
+                    SetupContextMenu();
+                    NotifyLayoutChanged();
                 };
                 iconSizeMenu.Items.Add(sizeItem);
             }
@@ -363,7 +438,37 @@ namespace WidgUI
             {
                 AddItem(dialog.FileName);
                 RenderDock();
+                NotifyLayoutChanged();
             }
+        }
+
+        private void RefreshAppearanceColors()
+        {
+            _appearanceColors = WidgetAppearanceHelper.ComputeColors(
+                _themeMode,
+                _adaptToBackground,
+                _opacity,
+                WidgetRegistry.GetActiveWallpaperPath(),
+                this.Left,
+                this.Top,
+                Math.Max(this.ActualWidth > 0 ? this.ActualWidth : 400, 120),
+                Math.Max(this.ActualHeight > 0 ? this.ActualHeight : 80, 60));
+        }
+
+        private void ApplyAppearance()
+        {
+            RefreshAppearanceColors();
+
+            if (_cardBorder != null)
+            {
+                _cardBorder.Background = new SolidColorBrush(_appearanceColors.Background);
+                _cardBorder.BorderBrush = new SolidColorBrush(_appearanceColors.Border);
+            }
+        }
+
+        private void NotifyLayoutChanged()
+        {
+            WidgetRegistry.AutoSaveLayout();
         }
 
         #region Drag and Drop Events
@@ -372,7 +477,8 @@ namespace WidgUI
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
                 e.Effects = DragDropEffects.Copy;
-                _cardBorder.Background = new SolidColorBrush(Color.FromArgb(200, 220, 235, 255));
+                Color highlight = _appearanceColors.AccentSurface;
+                _cardBorder.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Min(255, highlight.A + 40), highlight.R, highlight.G, highlight.B));
             }
         }
 
@@ -386,12 +492,12 @@ namespace WidgUI
 
         private void Dock_DragLeave(object sender, DragEventArgs e)
         {
-            _cardBorder.Background = new SolidColorBrush(Color.FromArgb(150, 240, 245, 255));
+            ApplyAppearance();
         }
 
         private void Dock_Drop(object sender, DragEventArgs e)
         {
-            _cardBorder.Background = new SolidColorBrush(Color.FromArgb(150, 240, 245, 255));
+            ApplyAppearance();
 
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
@@ -401,6 +507,7 @@ namespace WidgUI
                     AddItem(file);
                 }
                 RenderDock();
+                NotifyLayoutChanged();
             }
         }
         #endregion
@@ -415,6 +522,9 @@ namespace WidgUI
                 Left = this.Left,
                 Top = this.Top,
                 IconSize = _iconSize,
+                ThemeMode = (int)_themeMode,
+                AdaptToBackground = _adaptToBackground,
+                Opacity = _opacity,
                 Shortcuts = _items.Select(i => i.Path).ToList()
             };
         }
@@ -433,6 +543,17 @@ namespace WidgUI
             this.Left = data.Left;
             this.Top = data.Top;
 
+            if (Enum.IsDefined(typeof(WidgetThemeMode), data.ThemeMode))
+            {
+                _themeMode = (WidgetThemeMode)data.ThemeMode;
+            }
+
+            _adaptToBackground = data.AdaptToBackground;
+            if (data.Opacity > 0)
+            {
+                _opacity = data.Opacity;
+            }
+
             _items.Clear();
             if (data.Shortcuts != null)
             {
@@ -442,7 +563,9 @@ namespace WidgUI
                 }
             }
 
+            ApplyAppearance();
             RenderDock();
+            SetupContextMenu();
         }
         #endregion
     }

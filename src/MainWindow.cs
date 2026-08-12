@@ -759,10 +759,10 @@ namespace WidgUI
                 IsLocked = itemLock.IsChecked;
             };
 
-            MenuItem itemExit = new MenuItem { Header = "Cerrar Widget" };
+            MenuItem itemExit = new MenuItem { Header = "Ocultar Widget" };
             itemExit.Click += (s, e) =>
             {
-                Application.Current.Shutdown();
+                this.Hide();
             };
 
             cm.Items.Add(itemVariants);

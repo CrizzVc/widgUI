@@ -24,7 +24,7 @@ if not exist "%WINMD%" (
     exit /b 1
 )
 
-"%CSC%" /nologo /target:winexe /out:widgUI.exe /lib:"%WPF_DIR%" /r:PresentationCore.dll /r:PresentationFramework.dll /r:WindowsBase.dll /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Xaml.dll /r:System.Runtime.Serialization.dll /r:"%WINMD%" /r:"%SR_DLL%" /r:"%SRWR%" src\DesktopManager.cs src\MainWindow.cs src\EdgeMenuWindow.cs src\FolderWidgetWindow.cs src\ImageWidgetWindow.cs src\SystemMediaHelper.cs src\MusicWidgetWindow.cs src\DockWidgetWindow.cs src\CustomClockWidgetWindow.cs src\LayoutProfile.cs src\ProfileService.cs src\WidgetRegistry.cs src\TrayIcon.cs src\IconHelper.cs src\Program.cs
+"%CSC%" /nologo /target:winexe /out:widgUI.exe /lib:"%WPF_DIR%" /r:PresentationCore.dll /r:PresentationFramework.dll /r:WindowsBase.dll /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Xaml.dll /r:System.Runtime.Serialization.dll /r:"%WINMD%" /r:"%SR_DLL%" /r:"%SRWR%" src\DesktopManager.cs src\MainWindow.cs src\EdgeMenuWindow.cs src\FolderWidgetWindow.cs src\ImageWidgetWindow.cs src\SystemMediaHelper.cs src\MusicWidgetWindow.cs src\DockWidgetWindow.cs src\CustomClockWidgetWindow.cs src\LayoutProfile.cs src\ProfileService.cs src\WidgetRegistry.cs src\WidgetAppearanceHelper.cs src\TrayIcon.cs src\IconHelper.cs src\Program.cs
 
 if %ERRORLEVEL% EQU 0 (
     if not exist widgUI.exe.config (
