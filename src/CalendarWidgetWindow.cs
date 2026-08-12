@@ -10,15 +10,23 @@ using MediaColor = System.Windows.Media.Color;
 
 namespace WidgUI
 {
+    public enum CalendarStyleVariant
+    {
+        Standard = 0,
+        Glass = 1
+    }
+
     public class CalendarWidgetWindow : Window
     {
-        private const double WidgetWidth = 400;
-        private const double WidgetHeight = 150;
-        private const double CardCornerRadius = 26;
+        private const double StandardWidth = 400;
+        private const double StandardHeight = 150;
+        private const double GlassWidth = 430;
+        private const double GlassHeight = 158;
 
         private bool _isLocked;
         private bool _embeddedInDesktop = true;
         private string _widgetId;
+        private CalendarStyleVariant _styleVariant = CalendarStyleVariant.Standard;
         private WidgetThemeMode _themeMode = WidgetThemeMode.Light;
         private bool _adaptToBackground;
         private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
@@ -26,6 +34,8 @@ namespace WidgUI
         private MediaColor _solidBaseColor = MediaColor.FromRgb(240, 245, 255);
 
         private Border _cardBorder;
+        private StackPanel _leftPanel;
+        private StackPanel _rightPanel;
         private TextBlock _dayNameText;
         private TextBlock _dayNumberText;
         private TextBlock _eventsText;
@@ -68,8 +78,7 @@ namespace WidgUI
             this.Topmost = false;
             this.ShowInTaskbar = false;
             this.ResizeMode = ResizeMode.NoResize;
-            this.Width = WidgetWidth;
-            this.Height = WidgetHeight;
+            ApplyWindowSize();
             this.Left = SystemParameters.PrimaryScreenWidth - this.Width - 60;
             this.Top = 180;
 
@@ -90,11 +99,24 @@ namespace WidgUI
             }
         }
 
+        private void ApplyWindowSize()
+        {
+            if (_styleVariant == CalendarStyleVariant.Glass)
+            {
+                this.Width = GlassWidth;
+                this.Height = GlassHeight;
+            }
+            else
+            {
+                this.Width = StandardWidth;
+                this.Height = StandardHeight;
+            }
+        }
+
         private void BuildUI()
         {
             _cardBorder = new Border
             {
-                CornerRadius = new CornerRadius(CardCornerRadius),
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(16)
             };
@@ -103,9 +125,8 @@ namespace WidgUI
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            StackPanel leftPanel = new StackPanel
+            _leftPanel = new StackPanel
             {
-                VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(4, 0, 8, 0)
             };
 
@@ -134,15 +155,14 @@ namespace WidgUI
                 TextWrapping = TextWrapping.Wrap
             };
 
-            leftPanel.Children.Add(_dayNameText);
-            leftPanel.Children.Add(_dayNumberText);
-            leftPanel.Children.Add(_eventsText);
-            Grid.SetColumn(leftPanel, 0);
-            root.Children.Add(leftPanel);
+            _leftPanel.Children.Add(_dayNameText);
+            _leftPanel.Children.Add(_dayNumberText);
+            _leftPanel.Children.Add(_eventsText);
+            Grid.SetColumn(_leftPanel, 0);
+            root.Children.Add(_leftPanel);
 
-            StackPanel rightPanel = new StackPanel
+            _rightPanel = new StackPanel
             {
-                VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 4, 0)
             };
 
@@ -164,13 +184,68 @@ namespace WidgUI
                 _calendarGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             }
 
-            rightPanel.Children.Add(_monthNameText);
-            rightPanel.Children.Add(_calendarGrid);
-            Grid.SetColumn(rightPanel, 1);
-            root.Children.Add(rightPanel);
+            _rightPanel.Children.Add(_monthNameText);
+            _rightPanel.Children.Add(_calendarGrid);
+            Grid.SetColumn(_rightPanel, 1);
+            root.Children.Add(_rightPanel);
 
             _cardBorder.Child = root;
             this.Content = _cardBorder;
+            ApplyStyleVariant(_styleVariant);
+        }
+
+        private void ApplyStyleVariant(CalendarStyleVariant variant)
+        {
+            _styleVariant = variant;
+            ApplyWindowSize();
+
+            if (_cardBorder == null)
+            {
+                return;
+            }
+
+            if (variant == CalendarStyleVariant.Glass)
+            {
+                _cardBorder.CornerRadius = new CornerRadius(28);
+                _cardBorder.BorderThickness = new Thickness(0);
+                _cardBorder.Padding = new Thickness(20, 18, 18, 18);
+
+                _leftPanel.VerticalAlignment = VerticalAlignment.Top;
+                _rightPanel.VerticalAlignment = VerticalAlignment.Top;
+
+                _dayNameText.FontSize = 10.5;
+                _dayNameText.FontWeight = FontWeights.Bold;
+                _dayNumberText.FontSize = 64;
+                _dayNumberText.FontWeight = FontWeights.Light;
+                _dayNumberText.Margin = new Thickness(0, -4, 0, 0);
+                _eventsText.FontSize = 11.5;
+                _eventsText.FontWeight = FontWeights.Normal;
+                _eventsText.Opacity = 0.72;
+                _monthNameText.FontSize = 10.5;
+                _monthNameText.FontWeight = FontWeights.Bold;
+                _monthNameText.Margin = new Thickness(0, 0, 0, 8);
+            }
+            else
+            {
+                _cardBorder.CornerRadius = new CornerRadius(26);
+                _cardBorder.BorderThickness = new Thickness(1);
+                _cardBorder.Padding = new Thickness(16);
+
+                _leftPanel.VerticalAlignment = VerticalAlignment.Center;
+                _rightPanel.VerticalAlignment = VerticalAlignment.Center;
+
+                _dayNameText.FontSize = 11;
+                _dayNameText.FontWeight = FontWeights.SemiBold;
+                _dayNumberText.FontSize = 58;
+                _dayNumberText.FontWeight = FontWeights.Light;
+                _dayNumberText.Margin = new Thickness(0, -6, 0, 0);
+                _eventsText.FontSize = 12;
+                _eventsText.FontWeight = FontWeights.Normal;
+                _eventsText.Opacity = 1;
+                _monthNameText.FontSize = 11;
+                _monthNameText.FontWeight = FontWeights.SemiBold;
+                _monthNameText.Margin = new Thickness(0, 0, 0, 6);
+            }
         }
 
         private void SetupTimer()
@@ -233,10 +308,16 @@ namespace WidgUI
 
         private UIElement CreateDayCell(string text, bool isHeader, bool isToday, Brush primary, Brush secondary, bool lightForeground)
         {
+            double cellWidth = _styleVariant == CalendarStyleVariant.Glass ? 30 : 28;
+            double cellHeight = isHeader
+                ? (_styleVariant == CalendarStyleVariant.Glass ? 16 : 18)
+                : (_styleVariant == CalendarStyleVariant.Glass ? 26 : 24);
+            double todaySize = _styleVariant == CalendarStyleVariant.Glass ? 24 : 22;
+
             Grid host = new Grid
             {
-                Width = 28,
-                Height = isHeader ? 18 : 24,
+                Width = cellWidth,
+                Height = cellHeight,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -245,25 +326,34 @@ namespace WidgUI
             {
                 host.Children.Add(new Ellipse
                 {
-                    Width = 22,
-                    Height = 22,
-                    Fill = lightForeground
-                        ? Brushes.White
-                        : new SolidColorBrush(MediaColor.FromRgb(45, 55, 75)),
+                    Width = todaySize,
+                    Height = todaySize,
+                    Fill = Brushes.White,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 });
+            }
+
+            Brush dayForeground = isToday
+                ? new SolidColorBrush(_solidBaseColor)
+                : (isHeader ? secondary : primary);
+
+            if (_styleVariant == CalendarStyleVariant.Glass && !isToday && !isHeader)
+            {
+                dayForeground = new SolidColorBrush(MediaColor.FromArgb(205, 255, 255, 255));
             }
 
             TextBlock label = new TextBlock
             {
                 Text = text,
                 FontFamily = new FontFamily("Segoe UI"),
-                FontSize = isHeader ? 10 : 11,
+                FontSize = isHeader
+                    ? (_styleVariant == CalendarStyleVariant.Glass ? 9.5 : 10)
+                    : (_styleVariant == CalendarStyleVariant.Glass ? 10.5 : 11),
                 FontWeight = isHeader ? FontWeights.SemiBold : FontWeights.Normal,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = isToday ? new SolidColorBrush(_solidBaseColor) : (isHeader ? secondary : primary)
+                Foreground = dayForeground
             };
 
             if (isToday)
@@ -277,11 +367,25 @@ namespace WidgUI
 
         private bool IsLightForeground()
         {
+            if (_styleVariant == CalendarStyleVariant.Glass && !_adaptToBackground)
+            {
+                return true;
+            }
+
             return _appearanceColors.Foreground.R > 180;
         }
 
         private void ApplyTextColors()
         {
+            if (_styleVariant == CalendarStyleVariant.Glass)
+            {
+                _dayNameText.Foreground = new SolidColorBrush(MediaColor.FromArgb(220, 255, 255, 255));
+                _dayNumberText.Foreground = Brushes.White;
+                _eventsText.Foreground = new SolidColorBrush(MediaColor.FromArgb(180, 255, 255, 255));
+                _monthNameText.Foreground = new SolidColorBrush(MediaColor.FromArgb(220, 255, 255, 255));
+                return;
+            }
+
             Brush primary = new SolidColorBrush(_appearanceColors.Foreground);
             Brush secondary = new SolidColorBrush(_appearanceColors.SecondaryForeground);
 
@@ -293,6 +397,12 @@ namespace WidgUI
 
         private void RefreshAppearanceColors()
         {
+            if (_styleVariant == CalendarStyleVariant.Glass && !_adaptToBackground)
+            {
+                ApplyGlassPresetColors();
+                return;
+            }
+
             _appearanceColors = WidgetAppearanceHelper.ComputeColors(
                 _themeMode,
                 _adaptToBackground,
@@ -303,6 +413,42 @@ namespace WidgUI
                 this.Width,
                 this.Height);
 
+            if (_styleVariant == CalendarStyleVariant.Glass)
+            {
+                _appearanceColors.Foreground = MediaColor.FromRgb(255, 255, 255);
+                _appearanceColors.SecondaryForeground = MediaColor.FromArgb(185, 255, 255, 255);
+                _appearanceColors.Border = MediaColor.FromArgb(0, 0, 0, 0);
+                _solidBaseColor = MediaColor.FromRgb(
+                    _appearanceColors.Background.R,
+                    _appearanceColors.Background.G,
+                    _appearanceColors.Background.B);
+                return;
+            }
+
+            UpdateSolidBaseFromTheme();
+        }
+
+        private void ApplyGlassPresetColors()
+        {
+            byte alpha = WidgetAppearanceHelper.ToAlpha(_opacity);
+            MediaColor baseColor = _themeMode == WidgetThemeMode.Dark
+                ? MediaColor.FromRgb(42, 36, 44)
+                : MediaColor.FromRgb(168, 138, 152);
+
+            _solidBaseColor = baseColor;
+            _appearanceColors = new WidgetAppearanceColors
+            {
+                Background = MediaColor.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B),
+                Border = MediaColor.FromArgb(0, baseColor.R, baseColor.G, baseColor.B),
+                Foreground = MediaColor.FromRgb(255, 255, 255),
+                SecondaryForeground = MediaColor.FromArgb(185, 255, 255, 255),
+                Separator = MediaColor.FromArgb(90, 255, 255, 255),
+                AccentSurface = MediaColor.FromArgb(70, 255, 255, 255)
+            };
+        }
+
+        private void UpdateSolidBaseFromTheme()
+        {
             if (_adaptToBackground && !string.IsNullOrEmpty(WidgetRegistry.GetActiveWallpaperPath()))
             {
                 _solidBaseColor = MediaColor.FromRgb(
@@ -336,6 +482,41 @@ namespace WidgUI
         private void SetupContextMenu()
         {
             ContextMenu cm = new ContextMenu();
+
+            MenuItem styleMenu = new MenuItem { Header = "Estilo" };
+            MenuItem standardStyle = new MenuItem
+            {
+                Header = "Estándar",
+                IsCheckable = true,
+                IsChecked = _styleVariant == CalendarStyleVariant.Standard
+            };
+            standardStyle.Click += (s, e) =>
+            {
+                ApplyStyleVariant(CalendarStyleVariant.Standard);
+                ApplyAppearance();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
+            MenuItem glassStyle = new MenuItem
+            {
+                Header = "Cristal",
+                IsCheckable = true,
+                IsChecked = _styleVariant == CalendarStyleVariant.Glass
+            };
+            glassStyle.Click += (s, e) =>
+            {
+                ApplyStyleVariant(CalendarStyleVariant.Glass);
+                ApplyAppearance();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
+            styleMenu.Items.Add(standardStyle);
+            styleMenu.Items.Add(glassStyle);
+            cm.Items.Add(styleMenu);
+            cm.Items.Add(new Separator());
+
             MenuItem appearanceMenu = new MenuItem { Header = "Apariencia" };
 
             MenuItem lightItem = new MenuItem
@@ -441,7 +622,8 @@ namespace WidgUI
                 Top = this.Top,
                 ThemeMode = (int)_themeMode,
                 AdaptToBackground = _adaptToBackground,
-                Opacity = _opacity
+                Opacity = _opacity,
+                StyleVariant = (int)_styleVariant
             };
         }
 
@@ -470,6 +652,11 @@ namespace WidgUI
             if (data.Opacity > 0)
             {
                 _opacity = data.Opacity;
+            }
+
+            if (Enum.IsDefined(typeof(CalendarStyleVariant), data.StyleVariant))
+            {
+                ApplyStyleVariant((CalendarStyleVariant)data.StyleVariant);
             }
 
             ApplyAppearance();

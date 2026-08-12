@@ -377,6 +377,9 @@ namespace WidgUI
         [DataMember(Name = "opacity")]
         public double Opacity { get; set; }
 
+        [DataMember(Name = "styleVariant")]
+        public int StyleVariant { get; set; }
+
         public CalendarWidgetLayoutData()
         {
             Opacity = WidgetAppearanceHelper.DefaultOpacity;
