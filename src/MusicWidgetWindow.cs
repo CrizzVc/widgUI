@@ -19,7 +19,8 @@ namespace WidgUI
         Immersive,
         Compact,
         IosPanel,
-        Material
+        Material,
+        Transparent
     }
 
     public class MusicWidgetWindow : Window
@@ -225,6 +226,10 @@ namespace WidgUI
                     SetWidgetSize(480, 168);
                     BuildMaterialUI();
                     break;
+                case MusicWidgetVariant.Transparent:
+                    SetWidgetSize(280, 84);
+                    BuildTransparentUI();
+                    break;
                 default:
                     SetWidgetSize(380, 162);
                     BuildControlCenterUI();
@@ -262,6 +267,12 @@ namespace WidgUI
                     _minHeight = 130;
                     _maxWidth = 720;
                     _maxHeight = 260;
+                    break;
+                case MusicWidgetVariant.Transparent:
+                    _minWidth = 180;
+                    _minHeight = 64;
+                    _maxWidth = 600;
+                    _maxHeight = 150;
                     break;
                 default:
                     _minWidth = 280;
@@ -1163,6 +1174,89 @@ namespace WidgUI
             FinishResizableLayout(_cardBorder);
         }
 
+        private void BuildTransparentUI()
+        {
+            _cardBorder = new Border
+            {
+                Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                ClipToBounds = false
+            };
+
+            Grid content = new Grid { Margin = new Thickness(10) };
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border albumArt = CreateAlbumArtBorder(64, 12);
+            Grid.SetColumn(albumArt, 0);
+            content.Children.Add(albumArt);
+
+            StackPanel textPanel = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0)
+            };
+
+            _titleText = new TextBlock
+            {
+                Text = "Sin reproduccion",
+                FontSize = 16,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    Direction = 270,
+                    ShadowDepth = 0,
+                    Opacity = 0.65,
+                    BlurRadius = 4
+                }
+            };
+
+            _artistText = new TextBlock
+            {
+                Text = "♫ Sin artista",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
+                Margin = new Thickness(0, 4, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    Direction = 270,
+                    ShadowDepth = 0,
+                    Opacity = 0.65,
+                    BlurRadius = 4
+                }
+            };
+
+            textPanel.Children.Add(_titleText);
+            textPanel.Children.Add(_artistText);
+
+            Grid.SetColumn(textPanel, 1);
+            content.Children.Add(textPanel);
+
+            _equalizerPanel = null;
+            _avatarImage = null;
+            _backgroundArtImage = null;
+            _elapsedText = null;
+            _remainingText = null;
+            _progressTrack = null;
+            _progressFill = null;
+            _progressScrubber = null;
+            _playPauseButton = null;
+            _prevButton = null;
+            _nextButton = null;
+            _outputIcon = null;
+            _materialProgressFillHost = null;
+            _materialWavePath = null;
+
+            _cardBorder.Child = content;
+            FinishResizableLayout(_cardBorder);
+        }
+
         private Border CreateMaterialPlayButton(double size)
         {
             Border button = new Border
@@ -1779,6 +1873,10 @@ namespace WidgUI
                     {
                         _artistText.Text = "@" + BuildHandle(state.Artist);
                     }
+                    else if (_currentVariant == MusicWidgetVariant.Transparent)
+                    {
+                        _artistText.Text = "♫ " + state.Artist;
+                    }
                     else
                     {
                         _artistText.Text = state.Artist;
@@ -1811,7 +1909,7 @@ namespace WidgUI
                 if (_remainingText != null) _remainingText.Text = "-:--";
             }
 
-            if (_currentVariant == MusicWidgetVariant.IosPanel)
+            if (_currentVariant == MusicWidgetVariant.IosPanel || _currentVariant == MusicWidgetVariant.Transparent)
             {
                 if (_artistText != null)
                 {
@@ -2059,6 +2157,7 @@ namespace WidgUI
             itemVariants.Items.Add(CreateVariantMenuItem("Compacto", MusicWidgetVariant.Compact));
             itemVariants.Items.Add(CreateVariantMenuItem("Panel iOS", MusicWidgetVariant.IosPanel));
             itemVariants.Items.Add(CreateVariantMenuItem("Material", MusicWidgetVariant.Material));
+            itemVariants.Items.Add(CreateVariantMenuItem("Sin fondo", MusicWidgetVariant.Transparent));
 
             MenuItem itemLock = new MenuItem { Header = "Bloquear posicion" };
             itemLock.IsCheckable = true;
