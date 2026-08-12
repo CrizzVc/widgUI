@@ -13,7 +13,8 @@ namespace WidgUI
     public enum CalendarStyleVariant
     {
         Standard = 0,
-        Glass = 1
+        Glass = 1,
+        TimeGrid = 2
     }
 
     public class CalendarWidgetWindow : Window
@@ -22,6 +23,8 @@ namespace WidgUI
         private const double StandardHeight = 150;
         private const double GlassWidth = 430;
         private const double GlassHeight = 158;
+        private const double TimeGridWidth = 300;
+        private const double TimeGridHeight = 310;
 
         private bool _isLocked;
         private bool _embeddedInDesktop = true;
@@ -34,12 +37,15 @@ namespace WidgUI
         private MediaColor _solidBaseColor = MediaColor.FromRgb(240, 245, 255);
 
         private Border _cardBorder;
+        private Grid _twoColumnRoot;
         private StackPanel _leftPanel;
         private StackPanel _rightPanel;
+        private StackPanel _timeGridPanel;
         private TextBlock _dayNameText;
         private TextBlock _dayNumberText;
         private TextBlock _eventsText;
         private TextBlock _monthNameText;
+        private TextBlock _timeText;
         private Grid _calendarGrid;
         private DispatcherTimer _timer;
 
@@ -106,6 +112,11 @@ namespace WidgUI
                 this.Width = GlassWidth;
                 this.Height = GlassHeight;
             }
+            else if (_styleVariant == CalendarStyleVariant.TimeGrid)
+            {
+                this.Width = TimeGridWidth;
+                this.Height = TimeGridHeight;
+            }
             else
             {
                 this.Width = StandardWidth;
@@ -121,9 +132,10 @@ namespace WidgUI
                 Padding = new Thickness(16)
             };
 
-            Grid root = new Grid();
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            // --- Árbol para Standard / Glass (dos columnas) ---
+            _twoColumnRoot = new Grid();
+            _twoColumnRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
+            _twoColumnRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             _leftPanel = new StackPanel
             {
@@ -155,11 +167,8 @@ namespace WidgUI
                 TextWrapping = TextWrapping.Wrap
             };
 
-            _leftPanel.Children.Add(_dayNameText);
-            _leftPanel.Children.Add(_dayNumberText);
-            _leftPanel.Children.Add(_eventsText);
             Grid.SetColumn(_leftPanel, 0);
-            root.Children.Add(_leftPanel);
+            _twoColumnRoot.Children.Add(_leftPanel);
 
             _rightPanel = new StackPanel
             {
@@ -184,14 +193,68 @@ namespace WidgUI
                 _calendarGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             }
 
-            _rightPanel.Children.Add(_monthNameText);
-            _rightPanel.Children.Add(_calendarGrid);
             Grid.SetColumn(_rightPanel, 1);
-            root.Children.Add(_rightPanel);
+            _twoColumnRoot.Children.Add(_rightPanel);
 
-            _cardBorder.Child = root;
+            // --- Árbol para TimeGrid (vertical: hora, mes, grilla completa) ---
+            _timeGridPanel = new StackPanel();
+
+            _timeText = new TextBlock
+            {
+                FontFamily = new FontFamily("Segoe UI"),
+                FontSize = 46,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+
             this.Content = _cardBorder;
             ApplyStyleVariant(_styleVariant);
+        }
+
+        // Quita un elemento de cualquier panel que lo contenga actualmente,
+        // para poder reasignarlo al árbol visual correcto al cambiar de variante.
+        private static void DetachFromParent(FrameworkElement element)
+        {
+            if (element == null)
+            {
+                return;
+            }
+
+            Panel panel = element.Parent as Panel;
+            if (panel != null)
+            {
+                panel.Children.Remove(element);
+            }
+        }
+
+        private void RebuildContentTree()
+        {
+            DetachFromParent(_dayNameText);
+            DetachFromParent(_dayNumberText);
+            DetachFromParent(_eventsText);
+            DetachFromParent(_monthNameText);
+            DetachFromParent(_timeText);
+            DetachFromParent(_calendarGrid);
+
+            if (_styleVariant == CalendarStyleVariant.TimeGrid)
+            {
+                _timeGridPanel.Children.Add(_timeText);
+                _timeGridPanel.Children.Add(_monthNameText);
+                _timeGridPanel.Children.Add(_calendarGrid);
+                _cardBorder.Child = _timeGridPanel;
+            }
+            else
+            {
+                _leftPanel.Children.Add(_dayNameText);
+                _leftPanel.Children.Add(_dayNumberText);
+                _leftPanel.Children.Add(_eventsText);
+
+                _rightPanel.Children.Add(_monthNameText);
+                _rightPanel.Children.Add(_calendarGrid);
+
+                _cardBorder.Child = _twoColumnRoot;
+            }
         }
 
         private void ApplyStyleVariant(CalendarStyleVariant variant)
@@ -224,6 +287,22 @@ namespace WidgUI
                 _monthNameText.FontSize = 10.5;
                 _monthNameText.FontWeight = FontWeights.Bold;
                 _monthNameText.Margin = new Thickness(0, 0, 0, 8);
+                _monthNameText.HorizontalAlignment = HorizontalAlignment.Stretch;
+            }
+            else if (variant == CalendarStyleVariant.TimeGrid)
+            {
+                _cardBorder.CornerRadius = new CornerRadius(24);
+                _cardBorder.BorderThickness = new Thickness(0);
+                _cardBorder.Padding = new Thickness(22, 20, 22, 18);
+
+                _timeText.FontSize = 46;
+                _timeText.FontWeight = FontWeights.Bold;
+                _timeText.Margin = new Thickness(0, 0, 0, 10);
+
+                _monthNameText.FontSize = 12;
+                _monthNameText.FontWeight = FontWeights.Bold;
+                _monthNameText.Margin = new Thickness(0, 0, 0, 6);
+                _monthNameText.HorizontalAlignment = HorizontalAlignment.Right;
             }
             else
             {
@@ -245,7 +324,10 @@ namespace WidgUI
                 _monthNameText.FontSize = 11;
                 _monthNameText.FontWeight = FontWeights.SemiBold;
                 _monthNameText.Margin = new Thickness(0, 0, 0, 6);
+                _monthNameText.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
+
+            RebuildContentTree();
         }
 
         private void SetupTimer()
@@ -259,6 +341,15 @@ namespace WidgUI
         {
             DateTime now = DateTime.Now;
             CultureInfo culture = new CultureInfo("es-ES");
+
+            if (_styleVariant == CalendarStyleVariant.TimeGrid)
+            {
+                _timeText.Text = now.ToString("HH:mm", culture);
+                _monthNameText.Text = culture.DateTimeFormat.GetMonthName(now.Month).ToUpper(culture);
+                ApplyTextColors();
+                BuildMonthGridTimeGrid(now);
+                return;
+            }
 
             _dayNameText.Text = culture.DateTimeFormat.GetDayName(now.DayOfWeek).ToUpper(culture);
             _dayNumberText.Text = now.Day.ToString(culture);
@@ -293,6 +384,45 @@ namespace WidgUI
             {
                 bool isToday = day == now.Day;
                 UIElement cell = CreateDayCell(day.ToString(), false, isToday, primary, secondary, lightForeground);
+                Grid.SetRow(cell, row);
+                Grid.SetColumn(cell, colIndex);
+                _calendarGrid.Children.Add(cell);
+
+                colIndex++;
+                if (colIndex >= 7)
+                {
+                    colIndex = 0;
+                    row++;
+                }
+            }
+        }
+
+        // Grilla estilo iOS: semana empieza en lunes, sin conteo de eventos,
+        // días pasados en gris y día actual resaltado con un cuadrado.
+        private void BuildMonthGridTimeGrid(DateTime now)
+        {
+            _calendarGrid.Children.Clear();
+
+            string[] dayLetters = { "L", "M", "X", "J", "V", "S", "D" };
+
+            for (int col = 0; col < 7; col++)
+            {
+                UIElement headerCell = CreateTimeGridDayCell(dayLetters[col], true, false, false);
+                Grid.SetRow(headerCell, 0);
+                Grid.SetColumn(headerCell, col);
+                _calendarGrid.Children.Add(headerCell);
+            }
+
+            DateTime firstOfMonth = new DateTime(now.Year, now.Month, 1);
+            int daysInMonth = DateTime.DaysInMonth(now.Year, now.Month);
+            int colIndex = ((int)firstOfMonth.DayOfWeek + 6) % 7; // lunes = 0
+            int row = 1;
+
+            for (int day = 1; day <= daysInMonth; day++)
+            {
+                bool isToday = day == now.Day;
+                bool isPast = day < now.Day;
+                UIElement cell = CreateTimeGridDayCell(day.ToString(), false, isToday, isPast);
                 Grid.SetRow(cell, row);
                 Grid.SetColumn(cell, colIndex);
                 _calendarGrid.Children.Add(cell);
@@ -365,6 +495,66 @@ namespace WidgUI
             return host;
         }
 
+        private UIElement CreateTimeGridDayCell(string text, bool isHeader, bool isToday, bool isPast)
+        {
+            const double cellWidth = 34;
+            double cellHeight = isHeader ? 20 : 30;
+            const double todaySize = 26;
+
+            Grid host = new Grid
+            {
+                Width = cellWidth,
+                Height = cellHeight,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (isToday)
+            {
+                host.Children.Add(new Border
+                {
+                    Width = todaySize,
+                    Height = todaySize,
+                    CornerRadius = new CornerRadius(8),
+                    Background = new SolidColorBrush(_appearanceColors.Foreground),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+
+            Brush dayForeground;
+            if (isToday)
+            {
+                dayForeground = new SolidColorBrush(_solidBaseColor);
+            }
+            else if (isHeader)
+            {
+                dayForeground = new SolidColorBrush(_appearanceColors.Foreground);
+            }
+            else if (isPast)
+            {
+                dayForeground = new SolidColorBrush(_appearanceColors.SecondaryForeground);
+            }
+            else
+            {
+                dayForeground = new SolidColorBrush(_appearanceColors.Foreground);
+            }
+
+            TextBlock label = new TextBlock
+            {
+                Text = text,
+                FontFamily = new FontFamily("Segoe UI"),
+                FontSize = isHeader ? 12 : 13,
+                FontWeight = (isHeader || isToday) ? FontWeights.SemiBold : (isPast ? FontWeights.Normal : FontWeights.Medium),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = dayForeground
+            };
+
+            host.Children.Add(label);
+            return host;
+        }
+
         private bool IsLightForeground()
         {
             if (_styleVariant == CalendarStyleVariant.Glass && !_adaptToBackground)
@@ -383,6 +573,13 @@ namespace WidgUI
                 _dayNumberText.Foreground = Brushes.White;
                 _eventsText.Foreground = new SolidColorBrush(MediaColor.FromArgb(180, 255, 255, 255));
                 _monthNameText.Foreground = new SolidColorBrush(MediaColor.FromArgb(220, 255, 255, 255));
+                return;
+            }
+
+            if (_styleVariant == CalendarStyleVariant.TimeGrid)
+            {
+                _timeText.Foreground = new SolidColorBrush(_appearanceColors.Foreground);
+                _monthNameText.Foreground = new SolidColorBrush(_appearanceColors.SecondaryForeground);
                 return;
             }
 
@@ -512,8 +709,23 @@ namespace WidgUI
                 NotifyLayoutChanged();
             };
 
+            MenuItem timeGridStyle = new MenuItem
+            {
+                Header = "Reloj y grilla",
+                IsCheckable = true,
+                IsChecked = _styleVariant == CalendarStyleVariant.TimeGrid
+            };
+            timeGridStyle.Click += (s, e) =>
+            {
+                ApplyStyleVariant(CalendarStyleVariant.TimeGrid);
+                ApplyAppearance();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
             styleMenu.Items.Add(standardStyle);
             styleMenu.Items.Add(glassStyle);
+            styleMenu.Items.Add(timeGridStyle);
             cm.Items.Add(styleMenu);
             cm.Items.Add(new Separator());
 
