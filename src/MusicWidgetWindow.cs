@@ -21,6 +21,14 @@ namespace WidgUI
 
     public class MusicWidgetWindow : Window
     {
+        private enum TransportIconKind
+        {
+            Previous,
+            Play,
+            Pause,
+            Next
+        }
+
         private bool _isLocked;
         private bool _embeddedInDesktop = true;
         private bool _isSeeking;
@@ -384,13 +392,41 @@ namespace WidgUI
 
         private void BuildControlCenterUI()
         {
-            _cardBorder = CreateCardShell(22, new Thickness(14, 12, 14, 12), new Thickness(1));
+            _cardBorder = CreateCardShell(22, new Thickness(0), new Thickness(0));
+            _cardBorder.Background = Brushes.Transparent;
 
-            Grid root = new Grid();
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid shell = new Grid { ClipToBounds = true };
+            ApplyRoundedClip(shell, 22);
+
+            Border placeholderBg = new Border
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(48, 44, 52),
+                    Color.FromRgb(24, 22, 28),
+                    90)
+            };
+
+            _backgroundArtImage = new System.Windows.Controls.Image
+            {
+                Stretch = Stretch.UniformToFill,
+                Visibility = Visibility.Collapsed,
+                Effect = new BlurEffect
+                {
+                    Radius = 28,
+                    RenderingBias = RenderingBias.Quality
+                }
+            };
+            RenderOptions.SetBitmapScalingMode(_backgroundArtImage, BitmapScalingMode.HighQuality);
+
+            Border frostOverlay = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(155, 22, 22, 26))
+            };
+
+            Grid content = new Grid { Margin = new Thickness(14, 12, 14, 12) };
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             Grid topRow = new Grid { Margin = new Thickness(0, 0, 0, 10) };
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -399,6 +435,7 @@ namespace WidgUI
 
             Border albumArt = CreateAlbumArtBorder(54, 10);
             StackPanel textPanel = CreateTitleArtistPanel(15, 12);
+            textPanel.Margin = new Thickness(12, 0, 8, 0);
             _equalizerPanel = CreateEqualizer();
 
             Grid.SetColumn(albumArt, 0);
@@ -408,18 +445,27 @@ namespace WidgUI
             topRow.Children.Add(textPanel);
             topRow.Children.Add(_equalizerPanel);
 
-            Grid progressRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            CreateProgressBar(4, 2);
-            progressRow.Children.Add(_progressTrack);
+            Grid timelineRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            timelineRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            timelineRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            timelineRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            Grid timeRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            _elapsedText = CreateTimeLabel("0:00", HorizontalAlignment.Left, 11, new Thickness(0, 8, 0, 0));
-            _remainingText = CreateTimeLabel("-0:00", HorizontalAlignment.Right, 11, new Thickness(0, 8, 0, 0));
-            timeRow.Children.Add(_elapsedText);
-            timeRow.Children.Add(_remainingText);
+            _elapsedText = CreateTimeLabel("0:00", HorizontalAlignment.Left, 11, new Thickness(0));
+            _remainingText = CreateTimeLabel("-0:00", HorizontalAlignment.Right, 11, new Thickness(0));
+
+            CreateProgressBar(4, 2);
+            _progressTrack.Margin = new Thickness(10, 0, 10, 0);
+            _progressTrack.VerticalAlignment = VerticalAlignment.Center;
+
+            Grid.SetColumn(_elapsedText, 0);
+            Grid.SetColumn(_progressTrack, 1);
+            Grid.SetColumn(_remainingText, 2);
+            timelineRow.Children.Add(_elapsedText);
+            timelineRow.Children.Add(_progressTrack);
+            timelineRow.Children.Add(_remainingText);
 
             Grid controlsRow = new Grid();
-            StackPanel controls = CreateTransportControls(28, 38, 20, 34, 38, false);
+            StackPanel controls = CreateTransportControls(28, 38, 20, 34, 38, false, HorizontalAlignment.Center, true);
             controlsRow.Children.Add(controls);
 
             _outputIcon = new TextBlock
@@ -434,15 +480,20 @@ namespace WidgUI
             controlsRow.Children.Add(_outputIcon);
 
             Grid.SetRow(topRow, 0);
-            Grid.SetRow(progressRow, 1);
-            Grid.SetRow(timeRow, 2);
-            Grid.SetRow(controlsRow, 3);
-            root.Children.Add(topRow);
-            root.Children.Add(progressRow);
-            root.Children.Add(timeRow);
-            root.Children.Add(controlsRow);
+            Grid.SetRow(timelineRow, 1);
+            Grid.SetRow(controlsRow, 2);
+            content.Children.Add(topRow);
+            content.Children.Add(timelineRow);
+            content.Children.Add(controlsRow);
 
-            _cardBorder.Child = root;
+            shell.Children.Add(placeholderBg);
+            shell.Children.Add(_backgroundArtImage);
+            shell.Children.Add(frostOverlay);
+            shell.Children.Add(content);
+
+            _avatarImage = null;
+
+            _cardBorder.Child = shell;
             FinishResizableLayout(_cardBorder);
         }
 
@@ -718,15 +769,44 @@ namespace WidgUI
 
         private void BuildCompactUI()
         {
-            _cardBorder = CreateCardShell(0, new Thickness(10), new Thickness(1));
+            _cardBorder = CreateCardShell(16, new Thickness(0), new Thickness(0));
+            _cardBorder.Background = Brushes.Transparent;
 
-            Grid root = new Grid();
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid shell = new Grid { ClipToBounds = true };
+            ApplyRoundedClip(shell, 16);
 
-            Border albumArt = CreateAlbumArtBorder(88, 0);
+            Border placeholderBg = new Border
+            {
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(48, 44, 52),
+                    Color.FromRgb(24, 22, 28),
+                    90)
+            };
+
+            _backgroundArtImage = new System.Windows.Controls.Image
+            {
+                Stretch = Stretch.UniformToFill,
+                Visibility = Visibility.Collapsed,
+                Effect = new BlurEffect
+                {
+                    Radius = 28,
+                    RenderingBias = RenderingBias.Quality
+                }
+            };
+            RenderOptions.SetBitmapScalingMode(_backgroundArtImage, BitmapScalingMode.HighQuality);
+
+            Border frostOverlay = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(155, 22, 22, 26))
+            };
+
+            Grid content = new Grid { Margin = new Thickness(10) };
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border albumArt = CreateAlbumArtBorder(88, 12);
             Grid.SetColumn(albumArt, 0);
-            root.Children.Add(albumArt);
+            content.Children.Add(albumArt);
 
             Grid right = new Grid { Margin = new Thickness(12, 0, 0, 0) };
             right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -774,13 +854,17 @@ namespace WidgUI
             right.Children.Add(timeRow);
 
             Grid.SetColumn(right, 1);
-            root.Children.Add(right);
+            content.Children.Add(right);
+
+            shell.Children.Add(placeholderBg);
+            shell.Children.Add(_backgroundArtImage);
+            shell.Children.Add(frostOverlay);
+            shell.Children.Add(content);
 
             _equalizerPanel = null;
-            _backgroundArtImage = null;
             _avatarImage = null;
 
-            _cardBorder.Child = root;
+            _cardBorder.Child = shell;
             FinishResizableLayout(_cardBorder);
         }
 
@@ -883,7 +967,7 @@ namespace WidgUI
             double playButtonSize,
             bool darkCircles)
         {
-            return CreateTransportControls(sideFont, playFont, circleSize, sideButtonSize, playButtonSize, darkCircles, HorizontalAlignment.Center);
+            return CreateTransportControls(sideFont, playFont, circleSize, sideButtonSize, playButtonSize, darkCircles, HorizontalAlignment.Center, false);
         }
 
         private StackPanel CreateTransportControls(
@@ -895,6 +979,19 @@ namespace WidgUI
             bool darkCircles,
             HorizontalAlignment alignment)
         {
+            return CreateTransportControls(sideFont, playFont, circleSize, sideButtonSize, playButtonSize, darkCircles, alignment, false);
+        }
+
+        private StackPanel CreateTransportControls(
+            double sideFont,
+            double playFont,
+            double circleSize,
+            double sideButtonSize,
+            double playButtonSize,
+            bool darkCircles,
+            HorizontalAlignment alignment,
+            bool boldPathIcons)
+        {
             StackPanel controls = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -902,14 +999,55 @@ namespace WidgUI
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            _prevButton = CreateControlButton("\uE892", sideFont, () => _mediaHelper.SkipPrevious(), sideButtonSize, darkCircles);
-            _playPauseButton = CreatePlayPauseButton(playFont, playButtonSize, darkCircles);
-            _nextButton = CreateControlButton("\uE893", sideFont, () => _mediaHelper.SkipNext(), sideButtonSize, darkCircles);
+            if (boldPathIcons)
+            {
+                _prevButton = CreateControlButton(TransportIconKind.Previous, null, sideFont, () => _mediaHelper.SkipPrevious(), sideButtonSize, darkCircles, true);
+                _playPauseButton = CreatePlayPauseButton(playFont, playButtonSize, darkCircles, true);
+                _nextButton = CreateControlButton(TransportIconKind.Next, null, sideFont, () => _mediaHelper.SkipNext(), sideButtonSize, darkCircles, true);
+            }
+            else
+            {
+                _prevButton = CreateControlButton(null, "\uE892", sideFont, () => _mediaHelper.SkipPrevious(), sideButtonSize, darkCircles, false);
+                _playPauseButton = CreatePlayPauseButton(playFont, playButtonSize, darkCircles, false);
+                _nextButton = CreateControlButton(null, "\uE893", sideFont, () => _mediaHelper.SkipNext(), sideButtonSize, darkCircles, false);
+            }
 
             controls.Children.Add(_prevButton);
             controls.Children.Add(_playPauseButton);
             controls.Children.Add(_nextButton);
             return controls;
+        }
+
+        private static Geometry CreateTransportIconGeometry(TransportIconKind kind)
+        {
+            switch (kind)
+            {
+                case TransportIconKind.Play:
+                    return Geometry.Parse("M 13,9 L 13,31 L 31,20 Z");
+                case TransportIconKind.Pause:
+                    return Geometry.Parse("M 11,9 L 18,9 L 18,31 L 11,31 Z M 22,9 L 29,9 L 29,31 L 22,31 Z");
+                case TransportIconKind.Previous:
+                    return Geometry.Parse("M 6,9 L 6,31 L 11,31 L 11,9 Z M 14,20 L 24,9 L 24,31 Z M 26,20 L 34,9 L 34,31 Z");
+                default:
+                    return Geometry.Parse("M 34,9 L 34,31 L 29,31 L 29,9 Z M 26,20 L 16,9 L 16,31 Z M 14,20 L 6,9 L 6,31 Z");
+            }
+        }
+
+        private static Viewbox CreateTransportIconViewbox(TransportIconKind kind, double buttonSize, double scale)
+        {
+            Path path = new Path
+            {
+                Data = CreateTransportIconGeometry(kind),
+                Fill = Brushes.White,
+                Stretch = Stretch.Uniform
+            };
+
+            return new Viewbox
+            {
+                Width = buttonSize * scale,
+                Height = buttonSize * scale,
+                Child = path
+            };
         }
 
         private Border CreateIconCircle(string glyph, double size, Thickness margin)
@@ -1003,7 +1141,7 @@ namespace WidgUI
             };
         }
 
-        private Border CreateControlButton(string glyph, double fontSize, Action action, double size, bool darkCircle)
+        private Border CreateControlButton(TransportIconKind? pathKind, string glyph, double fontSize, Action action, double size, bool darkCircle, bool boldPathIcons)
         {
             Border button = new Border
             {
@@ -1017,16 +1155,23 @@ namespace WidgUI
                 Margin = new Thickness(6, 0, 6, 0)
             };
 
-            TextBlock icon = new TextBlock
+            if (boldPathIcons && pathKind.HasValue)
             {
-                Text = glyph,
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = fontSize,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            button.Child = icon;
+                button.Child = CreateTransportIconViewbox(pathKind.Value, size > 0 ? size : 34, 0.46);
+            }
+            else
+            {
+                TextBlock icon = new TextBlock
+                {
+                    Text = glyph,
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                    FontSize = fontSize,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                button.Child = icon;
+            }
 
             if (!darkCircle)
             {
@@ -1046,7 +1191,7 @@ namespace WidgUI
             return button;
         }
 
-        private Border CreatePlayPauseButton(double fontSize, double size, bool darkCircle)
+        private Border CreatePlayPauseButton(double fontSize, double size, bool darkCircle, bool boldPathIcons)
         {
             Border button = new Border
             {
@@ -1060,16 +1205,36 @@ namespace WidgUI
                 Margin = new Thickness(6, 0, 6, 0)
             };
 
-            TextBlock icon = new TextBlock
+            if (boldPathIcons)
             {
-                Text = "\uE768",
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = fontSize,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            button.Child = icon;
+                Path path = new Path
+                {
+                    Data = CreateTransportIconGeometry(TransportIconKind.Play),
+                    Fill = Brushes.White,
+                    Stretch = Stretch.Uniform
+                };
+
+                button.Tag = path;
+                button.Child = new Viewbox
+                {
+                    Width = (size > 0 ? size : 38) * 0.52,
+                    Height = (size > 0 ? size : 38) * 0.52,
+                    Child = path
+                };
+            }
+            else
+            {
+                TextBlock icon = new TextBlock
+                {
+                    Text = "\uE768",
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                    FontSize = fontSize,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                button.Child = icon;
+            }
 
             if (!darkCircle)
             {
@@ -1377,6 +1542,14 @@ namespace WidgUI
             if (icon != null)
             {
                 icon.Text = state.IsPlaying ? "\uE769" : "\uE768";
+            }
+            else
+            {
+                Path pathIcon = _playPauseButton.Tag as Path;
+                if (pathIcon != null)
+                {
+                    pathIcon.Data = CreateTransportIconGeometry(state.IsPlaying ? TransportIconKind.Pause : TransportIconKind.Play);
+                }
             }
 
             _playPauseButton.Opacity = state.CanPlayPause ? 1 : 0.35;
