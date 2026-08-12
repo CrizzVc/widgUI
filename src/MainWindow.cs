@@ -50,6 +50,9 @@ namespace WidgUI
         private double _resizeStartWidth;
         private double _resizeStartHeight;
         private double _aspectRatio = 170.0 / 230.0;
+        private double _designWidth = 170;
+        private double _designHeight = 230;
+        private bool _adaptToBackground = false;
         private const double MinClockWidth = 120;
         private const double MinClockHeight = 90;
         private const double MaxClockWidth = 520;
@@ -308,7 +311,18 @@ namespace WidgUI
             _mainStack.Children.Add(_dateText);
 
             _cardBorder.Child = _mainStack;
-            WrapContentForResize(_cardBorder, this.Width, this.Height);
+            WrapContentForResize(_cardBorder, _designWidth, _designHeight);
+        }
+
+        private void SetDesignSize(double width, double height)
+        {
+            _designWidth = width;
+            _designHeight = height;
+            if (_designHost != null)
+            {
+                _designHost.Width = _designWidth;
+                _designHost.Height = _designHeight;
+            }
         }
 
         private void WrapContentForResize(UIElement content, double designWidth, double designHeight)
@@ -337,10 +351,16 @@ namespace WidgUI
 
         private void UpdateDesignSize(double width, double height)
         {
-            if (_designHost != null)
+            SetDesignSize(width, height);
+        }
+
+        private void ApplyWindowSize(double width, double height)
+        {
+            this.Width = ClampClockSize(width, true);
+            this.Height = ClampClockSize(height, false);
+            if (this.Height > 0)
             {
-                _designHost.Width = width;
-                _designHost.Height = height;
+                _aspectRatio = this.Width / this.Height;
             }
         }
 
@@ -413,7 +433,11 @@ namespace WidgUI
 
             this.Width = newWidth;
             this.Height = newHeight;
-            UpdateDesignSize(newWidth, newHeight);
+            if (this.Height > 0)
+            {
+                _aspectRatio = this.Width / this.Height;
+            }
+            WidgetRegistry.AutoSaveLayout();
         }
 
         private void ResizeHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -436,13 +460,8 @@ namespace WidgUI
 
         private void SetClockSize(double width, double height)
         {
-            this.Width = ClampClockSize(width, true);
-            this.Height = ClampClockSize(height, false);
-            if (this.Height > 0)
-            {
-                _aspectRatio = this.Width / this.Height;
-            }
-            UpdateDesignSize(this.Width, this.Height);
+            SetDesignSize(width, height);
+            ApplyWindowSize(width, height);
         }
 
         public void ApplyStyleVariant(WidgetStyleVariant variant)
@@ -570,6 +589,39 @@ namespace WidgUI
             }
 
             UpdateTimeDisplay();
+            ApplyAdaptiveColors();
+        }
+
+        private void ApplyAdaptiveColors()
+        {
+            if (!_adaptToBackground)
+            {
+                return;
+            }
+
+            WidgetAppearanceColors colors = WidgetAppearanceHelper.ComputeColors(
+                WidgetThemeMode.Light,
+                true,
+                100,
+                WidgetRegistry.GetActiveWallpaperPath(),
+                this.Left,
+                this.Top,
+                Math.Max(this.ActualWidth > 0 ? this.ActualWidth : this.Width, MinClockWidth),
+                Math.Max(this.ActualHeight > 0 ? this.ActualHeight : this.Height, MinClockHeight));
+
+            Brush primary = new SolidColorBrush(colors.Foreground);
+            Brush secondary = new SolidColorBrush(colors.SecondaryForeground);
+
+            _hoursText.Foreground = primary;
+            _minutesText.Foreground = primary;
+            _separatorText.Foreground = primary;
+            _dateText.Foreground = secondary;
+            _amPmText.Foreground = secondary;
+
+            if (_hoursUsesOutline)
+            {
+                SyncHoursOutline();
+            }
         }
 
         private void ApplyTransparentCardShell()
@@ -759,6 +811,21 @@ namespace WidgUI
                 IsLocked = itemLock.IsChecked;
             };
 
+            MenuItem itemAdapt = new MenuItem { Header = "Adaptar color al fondo", IsCheckable = true, IsChecked = _adaptToBackground };
+            itemAdapt.Click += (s, e) =>
+            {
+                _adaptToBackground = itemAdapt.IsChecked;
+                if (_adaptToBackground)
+                {
+                    ApplyAdaptiveColors();
+                }
+                else
+                {
+                    ApplyStyleVariant(_currentVariant);
+                }
+                WidgetRegistry.AutoSaveLayout();
+            };
+
             MenuItem itemExit = new MenuItem { Header = "Ocultar Widget" };
             itemExit.Click += (s, e) =>
             {
@@ -770,6 +837,7 @@ namespace WidgUI
             cm.Items.Add(itemFormat);
             cm.Items.Add(itemAmPm);
             cm.Items.Add(itemDate);
+            cm.Items.Add(itemAdapt);
             cm.Items.Add(itemLock);
             cm.Items.Add(new Separator());
             cm.Items.Add(itemExit);
@@ -812,7 +880,8 @@ namespace WidgUI
                 Left = this.Left,
                 Top = this.Top,
                 Width = this.Width,
-                Height = this.Height
+                Height = this.Height,
+                AdaptToBackground = _adaptToBackground
             };
         }
 
@@ -837,9 +906,13 @@ namespace WidgUI
 
             if (data.Width >= MinClockWidth && data.Height >= MinClockHeight)
             {
-                this.Width = ClampClockSize(data.Width, true);
-                this.Height = ClampClockSize(data.Height, false);
-                UpdateDesignSize(this.Width, this.Height);
+                ApplyWindowSize(data.Width, data.Height);
+            }
+
+            _adaptToBackground = data.AdaptToBackground;
+            if (_adaptToBackground)
+            {
+                ApplyAdaptiveColors();
             }
 
             if (data.Visible)

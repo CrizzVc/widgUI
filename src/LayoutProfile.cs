@@ -37,6 +37,9 @@ namespace WidgUI
         [DataMember(Name = "customClockWidgets")]
         public List<CustomClockWidgetLayoutData> CustomClockWidgets { get; set; }
 
+        [DataMember(Name = "appWidgets")]
+        public List<AppWidgetLayoutData> AppWidgets { get; set; }
+
         public LayoutProfile()
         {
             Version = 1;
@@ -45,6 +48,7 @@ namespace WidgUI
             MusicWidgets = new List<MusicWidgetLayoutData>();
             DockWidgets = new List<DockWidgetLayoutData>();
             CustomClockWidgets = new List<CustomClockWidgetLayoutData>();
+            AppWidgets = new List<AppWidgetLayoutData>();
         }
     }
 
@@ -80,6 +84,9 @@ namespace WidgUI
 
         [DataMember(Name = "height")]
         public double Height { get; set; }
+
+        [DataMember(Name = "adaptToBackground")]
+        public bool AdaptToBackground { get; set; }
     }
 
     [DataContract]
@@ -247,6 +254,15 @@ namespace WidgUI
         [DataMember(Name = "showAmPm")]
         public bool ShowAmPm { get; set; }
 
+        [DataMember(Name = "width")]
+        public double Width { get; set; }
+
+        [DataMember(Name = "height")]
+        public double Height { get; set; }
+
+        [DataMember(Name = "adaptToBackground")]
+        public bool AdaptToBackground { get; set; }
+
         public CustomClockWidgetLayoutData()
         {
             FontFamily = "Segoe UI";
@@ -255,6 +271,43 @@ namespace WidgUI
             FontWeight = "Normal";
             IsVertical = false;
             ShowAmPm = true;
+            Width = 220;
+            Height = 80;
+        }
+    }
+
+    [DataContract]
+    public class AppWidgetLayoutData
+    {
+        [DataMember(Name = "id")]
+        public string Id { get; set; }
+
+        [DataMember(Name = "path")]
+        public string Path { get; set; }
+
+        [DataMember(Name = "isLocked")]
+        public bool IsLocked { get; set; }
+
+        [DataMember(Name = "left")]
+        public double Left { get; set; }
+
+        [DataMember(Name = "top")]
+        public double Top { get; set; }
+
+        [DataMember(Name = "themeMode")]
+        public int ThemeMode { get; set; }
+
+        [DataMember(Name = "adaptToBackground")]
+        public bool AdaptToBackground { get; set; }
+
+        [DataMember(Name = "opacity")]
+        public double Opacity { get; set; }
+
+        [DataMember(Name = "showWhiteBackground")]
+        public bool? ShowWhiteBackground { get; set; }
+        public AppWidgetLayoutData()
+        {
+            Opacity = WidgetAppearanceHelper.DefaultOpacity;
         }
     }
 }

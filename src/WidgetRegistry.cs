@@ -15,6 +15,7 @@ namespace WidgUI
         private static readonly List<MusicWidgetWindow> _musicWidgets = new List<MusicWidgetWindow>();
         private static readonly List<DockWidgetWindow> _dockWidgets = new List<DockWidgetWindow>();
         private static readonly List<CustomClockWidgetWindow> _customClockWidgets = new List<CustomClockWidgetWindow>();
+        private static readonly List<AppWidgetWindow> _appWidgets = new List<AppWidgetWindow>();
 
         public static void Initialize(MainWindow clock, EdgeMenuWindow edgeMenu)
         {
@@ -46,6 +47,7 @@ namespace WidgUI
             stack.AddRange(_musicWidgets);
             stack.AddRange(_dockWidgets);
             stack.AddRange(_customClockWidgets);
+            stack.AddRange(_appWidgets);
             stack.Add(_edgeMenu);
 
             DesktopManager.StackWindows(stack);
@@ -62,7 +64,8 @@ namespace WidgUI
                 ImageWidgets = _imageWidgets.Select(w => w.ToLayoutData()).ToList(),
                 MusicWidgets = _musicWidgets.Select(w => w.ToLayoutData()).ToList(),
                 DockWidgets = _dockWidgets.Select(w => w.ToLayoutData()).ToList(),
-                CustomClockWidgets = _customClockWidgets.Select(w => w.ToLayoutData()).ToList()
+                CustomClockWidgets = _customClockWidgets.Select(w => w.ToLayoutData()).ToList(),
+                AppWidgets = _appWidgets.Select(w => w.ToLayoutData()).ToList()
             };
 
             return profile;
@@ -124,6 +127,14 @@ namespace WidgUI
                 foreach (CustomClockWidgetLayoutData data in profile.CustomClockWidgets)
                 {
                     OpenCustomClockWidget(data);
+                }
+            }
+
+            if (profile.AppWidgets != null)
+            {
+                foreach (AppWidgetLayoutData data in profile.AppWidgets)
+                {
+                    OpenAppWidget(data);
                 }
             }
 
@@ -238,6 +249,17 @@ namespace WidgUI
             return widget;
         }
 
+        public static AppWidgetWindow OpenAppWidget(AppWidgetLayoutData data = null)
+        {
+            AppWidgetWindow widget = data != null
+                ? new AppWidgetWindow(data)
+                : new AppWidgetWindow();
+
+            RegisterAppWidget(widget);
+            widget.Show();
+            return widget;
+        }
+
         public static void RegisterFolderWidget(FolderWidgetWindow widget)
         {
             if (widget == null || _folderWidgets.Contains(widget))
@@ -295,6 +317,18 @@ namespace WidgUI
 
             _customClockWidgets.Add(widget);
             widget.Closed += CustomClockWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
+        }
+
+        public static void RegisterAppWidget(AppWidgetWindow widget)
+        {
+            if (widget == null || _appWidgets.Contains(widget))
+            {
+                return;
+            }
+
+            _appWidgets.Add(widget);
+            widget.Closed += AppWidget_Closed;
             widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
         }
 
@@ -363,6 +397,18 @@ namespace WidgUI
             _customClockWidgets.Remove(widget);
         }
 
+        private static void AppWidget_Closed(object sender, EventArgs e)
+        {
+            AppWidgetWindow widget = sender as AppWidgetWindow;
+            if (widget == null)
+            {
+                return;
+            }
+
+            widget.Closed -= AppWidget_Closed;
+            _appWidgets.Remove(widget);
+        }
+
         private static void CloseSecondaryWidgets()
         {
             foreach (FolderWidgetWindow widget in _folderWidgets.ToList())
@@ -399,6 +445,13 @@ namespace WidgUI
                 widget.Close();
             }
             _customClockWidgets.Clear();
+
+            foreach (AppWidgetWindow widget in _appWidgets.ToList())
+            {
+                widget.Closed -= AppWidget_Closed;
+                widget.Close();
+            }
+            _appWidgets.Clear();
         }
     }
 }

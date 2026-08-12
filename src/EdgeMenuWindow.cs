@@ -1721,7 +1721,11 @@ namespace WidgUI
                 WidgetRegistry.OpenImageWidgetsFromPicker();
                 return false;
             }));
-            grid.Children.Add(CreateWidgetItem("Juegos", "\uE7FC", false, null));
+            grid.Children.Add(CreateWidgetItem("Apps", "\uE71D", false, () =>
+            {
+                WidgetRegistry.OpenAppWidget();
+                return false;
+            }));
             grid.Children.Add(CreateWidgetItem("Calendario", "\uE787", false, null));
 
             scrollViewer.Content = grid;
