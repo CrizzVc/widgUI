@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
@@ -49,8 +50,9 @@ namespace WidgUI
         private TextBlock _titleText;
         private TextBlock _artistText;
         private StackPanel _equalizerPanel;
-        private Border _progressTrack;
+        private Grid _progressTrack;
         private Border _progressFill;
+        private Ellipse _progressScrubber;
         private TextBlock _elapsedText;
         private TextBlock _remainingText;
         private Border _playPauseButton;
@@ -195,7 +197,7 @@ namespace WidgUI
             switch (variant)
             {
                 case MusicWidgetVariant.Immersive:
-                    SetWidgetSize(280, 280);
+                    SetWidgetSize(300, 300);
                     BuildImmersiveUI();
                     break;
                 case MusicWidgetVariant.Compact:
@@ -448,10 +450,19 @@ namespace WidgUI
         {
             _cardBorder = new Border
             {
+                CornerRadius = new CornerRadius(38),
                 Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                ClipToBounds = true
+                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 0, 0, 0)),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = true,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    Direction = 270,
+                    ShadowDepth = 0,
+                    Opacity = 0.55,
+                    BlurRadius = 30
+                }
             };
 
             Grid root = new Grid();
@@ -460,8 +471,8 @@ namespace WidgUI
             {
                 Name = "ImmersivePlaceholder",
                 Background = new LinearGradientBrush(
-                    Color.FromRgb(55, 55, 60),
-                    Color.FromRgb(25, 25, 28),
+                    Color.FromRgb(62, 58, 55),
+                    Color.FromRgb(28, 26, 24),
                     90)
             };
             root.Children.Add(placeholderBg);
@@ -474,18 +485,29 @@ namespace WidgUI
             RenderOptions.SetBitmapScalingMode(_backgroundArtImage, BitmapScalingMode.HighQuality);
             root.Children.Add(_backgroundArtImage);
 
+            Border topFade = new Border
+            {
+                VerticalAlignment = VerticalAlignment.Top,
+                Height = 80,
+                Background = new LinearGradientBrush(
+                    Color.FromArgb(120, 0, 0, 0),
+                    Color.FromArgb(0, 0, 0, 0),
+                    90)
+            };
+            root.Children.Add(topFade);
+
             Border bottomFade = new Border
             {
                 VerticalAlignment = VerticalAlignment.Bottom,
-                Height = 130,
+                Height = 150,
                 Background = new LinearGradientBrush(
                     Color.FromArgb(0, 0, 0, 0),
-                    Color.FromArgb(210, 0, 0, 0),
+                    Color.FromArgb(200, 0, 0, 0),
                     90)
             };
             root.Children.Add(bottomFade);
 
-            Grid overlay = new Grid { Margin = new Thickness(10) };
+            Grid overlay = new Grid { Margin = new Thickness(14, 14, 14, 12) };
             overlay.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             overlay.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             overlay.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -498,11 +520,11 @@ namespace WidgUI
 
             Border artistPill = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(170, 20, 20, 22)),
-                CornerRadius = new CornerRadius(18),
-                Padding = new Thickness(4, 4, 12, 4),
+                Background = new SolidColorBrush(Color.FromArgb(145, 22, 22, 24)),
+                CornerRadius = new CornerRadius(20),
+                Padding = new Thickness(5, 5, 14, 5),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                MaxWidth = 190
+                MaxWidth = 200
             };
 
             Grid pillGrid = new Grid();
@@ -511,12 +533,12 @@ namespace WidgUI
 
             Border avatarBorder = new Border
             {
-                Width = 28,
-                Height = 28,
-                CornerRadius = new CornerRadius(14),
-                Background = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                Width = 32,
+                Height = 32,
+                CornerRadius = new CornerRadius(16),
+                Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
                 ClipToBounds = true,
-                Margin = new Thickness(0, 0, 8, 0)
+                Margin = new Thickness(0, 0, 10, 0)
             };
 
             Grid avatarGrid = new Grid();
@@ -530,7 +552,7 @@ namespace WidgUI
             {
                 Text = "\uE8D6",
                 FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = 12,
+                FontSize = 14,
                 Foreground = Brushes.White,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -543,16 +565,17 @@ namespace WidgUI
             _titleText = new TextBlock
             {
                 Text = "Sin reproduccion",
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
             _artistText = new TextBlock
             {
-                Text = "Artista",
-                FontSize = 9,
-                Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+                Text = "@artista",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromArgb(180, 210, 210, 215)),
+                Margin = new Thickness(0, 1, 0, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
             pillText.Children.Add(_titleText);
@@ -565,38 +588,85 @@ namespace WidgUI
             artistPill.Child = pillGrid;
 
             StackPanel actionButtons = new StackPanel { Orientation = Orientation.Horizontal };
-            actionButtons.Children.Add(CreateIconCircle("\uE72D", 30));
-            actionButtons.Children.Add(CreateIconCircle("\uEB52", 30, new Thickness(6, 0, 0, 0)));
+            actionButtons.Children.Add(CreateIconCircle("\uE72D", 34));
+            actionButtons.Children.Add(CreateIconCircle("\uEB52", 34, new Thickness(8, 0, 0, 0)));
 
             Grid.SetColumn(artistPill, 0);
             Grid.SetColumn(actionButtons, 1);
             topRow.Children.Add(artistPill);
             topRow.Children.Add(actionButtons);
 
-            Grid progressRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
-            CreateProgressBar(3, 1.5);
-            progressRow.Children.Add(_progressTrack);
-
-            Grid timeRow = new Grid();
-            _elapsedText = CreateTimeLabel("0:00", HorizontalAlignment.Left, 10, new Thickness(0, 0, 0, 6));
-            _remainingText = CreateTimeLabel("-0:00", HorizontalAlignment.Right, 10, new Thickness(0, 0, 0, 6));
+            Grid timeRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            _elapsedText = CreateTimeLabel("0:00", HorizontalAlignment.Left, 11, new Thickness(0));
+            _remainingText = CreateTimeLabel("-0:00", HorizontalAlignment.Right, 11, new Thickness(0));
             timeRow.Children.Add(_elapsedText);
             timeRow.Children.Add(_remainingText);
 
-            StackPanel controls = CreateTransportControls(14, 16, 14, 36, 36, true);
+            Grid progressRow = new Grid();
+            CreateImmersiveProgressBar();
+            progressRow.Children.Add(_progressTrack);
+
+            StackPanel controls = CreateTransportControls(11, 13, 11, 40, 44, true);
+            controls.Margin = new Thickness(0, 10, 0, 0);
 
             Grid.SetRow(topRow, 0);
-            Grid.SetRow(progressRow, 2);
-            Grid.SetRow(timeRow, 3);
+            Grid.SetRow(timeRow, 2);
+            Grid.SetRow(progressRow, 3);
             Grid.SetRow(controls, 4);
             overlay.Children.Add(topRow);
-            overlay.Children.Add(progressRow);
             overlay.Children.Add(timeRow);
+            overlay.Children.Add(progressRow);
             overlay.Children.Add(controls);
 
             root.Children.Add(overlay);
             _cardBorder.Child = root;
             FinishResizableLayout(_cardBorder);
+        }
+
+        private void CreateImmersiveProgressBar()
+        {
+            _progressScrubber = new Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Fill = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(-3, 0, 0, 0),
+                Visibility = Visibility.Collapsed
+            };
+
+            _progressTrack = new Grid
+            {
+                Height = 14,
+                Cursor = Cursors.Hand
+            };
+
+            Border trackLine = new Border
+            {
+                Height = 2,
+                VerticalAlignment = VerticalAlignment.Center,
+                CornerRadius = new CornerRadius(1),
+                Background = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255))
+            };
+
+            _progressFill = new Border
+            {
+                Width = 0,
+                Height = 3,
+                VerticalAlignment = VerticalAlignment.Center,
+                CornerRadius = new CornerRadius(1.5),
+                Background = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+
+            _progressTrack.Children.Add(trackLine);
+            _progressTrack.Children.Add(_progressFill);
+            _progressTrack.Children.Add(_progressScrubber);
+
+            _progressTrack.MouseLeftButtonDown += ProgressTrack_MouseLeftButtonDown;
+            _progressTrack.MouseLeftButtonUp += ProgressTrack_MouseLeftButtonUp;
+            _progressTrack.MouseMove += ProgressTrack_MouseMove;
         }
 
         private void BuildCompactUI()
@@ -728,13 +798,19 @@ namespace WidgUI
 
         private void CreateProgressBar(double height, double radius)
         {
-            _progressTrack = new Border
+            _progressScrubber = null;
+            _progressTrack = new Grid
             {
                 Height = height,
-                CornerRadius = new CornerRadius(radius),
-                Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
                 Cursor = Cursors.Hand
             };
+
+            Border trackBg = new Border
+            {
+                CornerRadius = new CornerRadius(radius),
+                Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255))
+            };
+
             _progressFill = new Border
             {
                 Width = 0,
@@ -743,7 +819,9 @@ namespace WidgUI
                 Background = new SolidColorBrush(Color.FromRgb(230, 230, 235)),
                 HorizontalAlignment = HorizontalAlignment.Left
             };
-            _progressTrack.Child = _progressFill;
+
+            _progressTrack.Children.Add(trackBg);
+            _progressTrack.Children.Add(_progressFill);
             _progressTrack.MouseLeftButtonDown += ProgressTrack_MouseLeftButtonDown;
             _progressTrack.MouseLeftButtonUp += ProgressTrack_MouseLeftButtonUp;
             _progressTrack.MouseMove += ProgressTrack_MouseMove;
@@ -793,7 +871,7 @@ namespace WidgUI
                 Width = size,
                 Height = size,
                 CornerRadius = new CornerRadius(size / 2),
-                Background = new SolidColorBrush(Color.FromArgb(170, 20, 20, 22)),
+                Background = new SolidColorBrush(Color.FromArgb(145, 22, 22, 24)),
                 Margin = margin
             };
             circle.Child = new TextBlock
@@ -885,7 +963,7 @@ namespace WidgUI
                 Height = size > 0 ? size : 34,
                 CornerRadius = new CornerRadius((size > 0 ? size : 34) / 2),
                 Background = darkCircle
-                    ? new SolidColorBrush(Color.FromArgb(170, 20, 20, 22))
+                    ? new SolidColorBrush(Color.FromArgb(145, 22, 22, 24))
                     : Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 Margin = new Thickness(6, 0, 6, 0)
@@ -928,7 +1006,7 @@ namespace WidgUI
                 Height = size > 0 ? size : 38,
                 CornerRadius = new CornerRadius((size > 0 ? size : 38) / 2),
                 Background = darkCircle
-                    ? new SolidColorBrush(Color.FromArgb(170, 20, 20, 22))
+                    ? new SolidColorBrush(Color.FromArgb(145, 22, 22, 24))
                     : Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 Margin = new Thickness(6, 0, 6, 0)
@@ -1025,7 +1103,15 @@ namespace WidgUI
                 _currentState.Title = state.Title;
                 if (_titleText != null)
                 {
-                    _titleText.Text = state.Title;
+                    if (_currentVariant == MusicWidgetVariant.Immersive)
+                    {
+                        string artistLabel = string.IsNullOrWhiteSpace(state.Artist) ? state.Title : state.Artist;
+                        _titleText.Text = artistLabel;
+                    }
+                    else
+                    {
+                        _titleText.Text = state.Title;
+                    }
                 }
             }
 
@@ -1043,6 +1129,10 @@ namespace WidgUI
                         _artistText.Text = state.Artist;
                     }
                 }
+            }
+            else if (_currentVariant == MusicWidgetVariant.Immersive && _artistText != null && !string.IsNullOrEmpty(state.Title))
+            {
+                _artistText.Text = "@" + BuildHandle(state.Title);
             }
 
             UpdateAlbumArt(state);
@@ -1219,6 +1309,13 @@ namespace WidgUI
             }
 
             _progressFill.Width = Math.Max(0, Math.Min(width, width * percent));
+
+            if (_progressScrubber != null)
+            {
+                double fillWidth = _progressFill.Width;
+                _progressScrubber.Margin = new Thickness(Math.Max(-3, fillWidth - 3.5), 0, 0, 0);
+                _progressScrubber.Visibility = fillWidth > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
 
         private void UpdateControls(MediaState state)
