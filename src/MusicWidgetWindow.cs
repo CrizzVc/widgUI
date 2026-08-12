@@ -450,10 +450,10 @@ namespace WidgUI
         {
             _cardBorder = new Border
             {
-                CornerRadius = new CornerRadius(38),
+                CornerRadius = new CornerRadius(40),
                 Background = Brushes.Transparent,
-                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 0, 0, 0)),
-                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
+                BorderThickness = new Thickness(1.5),
                 ClipToBounds = true,
                 Effect = new DropShadowEffect
                 {
@@ -518,27 +518,31 @@ namespace WidgUI
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            Border artistPill = new Border
+            Grid identityRow = new Grid
             {
-                Background = new SolidColorBrush(Color.FromArgb(145, 22, 22, 24)),
-                CornerRadius = new CornerRadius(20),
-                Padding = new Thickness(5, 5, 14, 5),
+                Background = Brushes.Transparent,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 MaxWidth = 200
             };
+            identityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            identityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            Grid pillGrid = new Grid();
-            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid avatarWrap = new Grid
+            {
+                Width = 34,
+                Height = 34,
+                Margin = new Thickness(0, 0, 10, 0)
+            };
 
             Border avatarBorder = new Border
             {
-                Width = 32,
-                Height = 32,
-                CornerRadius = new CornerRadius(16),
+                Width = 34,
+                Height = 34,
+                CornerRadius = new CornerRadius(17),
                 Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
-                ClipToBounds = true,
-                Margin = new Thickness(0, 0, 10, 0)
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = true
             };
 
             Grid avatarGrid = new Grid();
@@ -559,41 +563,67 @@ namespace WidgUI
             };
             avatarGrid.Children.Add(_avatarImage);
             avatarGrid.Children.Add(_placeholderIcon);
+            ApplyRoundedClip(avatarGrid, 17);
             avatarBorder.Child = avatarGrid;
+            avatarWrap.Children.Add(avatarBorder);
 
-            StackPanel pillText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            Border cameraBadge = new Border
+            {
+                Width = 16,
+                Height = 16,
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Color.FromArgb(230, 28, 28, 30)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, -3, -3)
+            };
+            cameraBadge.Child = new TextBlock
+            {
+                Text = "\uE722",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 8,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            avatarWrap.Children.Add(cameraBadge);
+
+            StackPanel identityText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             _titleText = new TextBlock
             {
                 Text = "Sin reproduccion",
                 FontSize = 12,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
-                TextTrimming = TextTrimming.CharacterEllipsis
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Effect = new DropShadowEffect { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 6, Opacity = 0.5 }
             };
             _artistText = new TextBlock
             {
                 Text = "@artista",
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromArgb(180, 210, 210, 215)),
+                Foreground = new SolidColorBrush(Color.FromArgb(200, 220, 220, 225)),
                 Margin = new Thickness(0, 1, 0, 0),
-                TextTrimming = TextTrimming.CharacterEllipsis
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Effect = new DropShadowEffect { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 6, Opacity = 0.5 }
             };
-            pillText.Children.Add(_titleText);
-            pillText.Children.Add(_artistText);
+            identityText.Children.Add(_titleText);
+            identityText.Children.Add(_artistText);
 
-            Grid.SetColumn(avatarBorder, 0);
-            Grid.SetColumn(pillText, 1);
-            pillGrid.Children.Add(avatarBorder);
-            pillGrid.Children.Add(pillText);
-            artistPill.Child = pillGrid;
+            Grid.SetColumn(avatarWrap, 0);
+            Grid.SetColumn(identityText, 1);
+            identityRow.Children.Add(avatarWrap);
+            identityRow.Children.Add(identityText);
 
             StackPanel actionButtons = new StackPanel { Orientation = Orientation.Horizontal };
             actionButtons.Children.Add(CreateIconCircle("\uE72D", 34));
             actionButtons.Children.Add(CreateIconCircle("\uEB52", 34, new Thickness(8, 0, 0, 0)));
 
-            Grid.SetColumn(artistPill, 0);
+            Grid.SetColumn(identityRow, 0);
             Grid.SetColumn(actionButtons, 1);
-            topRow.Children.Add(artistPill);
+            topRow.Children.Add(identityRow);
             topRow.Children.Add(actionButtons);
 
             Grid timeRow = new Grid { Margin = new Thickness(0, 0, 0, 6) };
@@ -619,8 +649,25 @@ namespace WidgUI
             overlay.Children.Add(controls);
 
             root.Children.Add(overlay);
+            ApplyRoundedClip(root, 40);
             _cardBorder.Child = root;
             FinishResizableLayout(_cardBorder);
+        }
+
+        private static void ApplyRoundedClip(FrameworkElement element, double radius)
+        {
+            RectangleGeometry clip = new RectangleGeometry { RadiusX = radius, RadiusY = radius };
+            element.Clip = clip;
+
+            element.SizeChanged += (s, e) =>
+            {
+                clip.Rect = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
+            };
+
+            if (element.ActualWidth > 0 && element.ActualHeight > 0)
+            {
+                clip.Rect = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
+            }
         }
 
         private void CreateImmersiveProgressBar()
@@ -768,6 +815,7 @@ namespace WidgUI
 
             artGrid.Children.Add(_albumArtImage);
             artGrid.Children.Add(_placeholderIcon);
+            ApplyRoundedClip(artGrid, radius);
             border.Child = artGrid;
             return border;
         }
