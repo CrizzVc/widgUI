@@ -107,7 +107,7 @@ namespace WidgUI
                 Background = new SolidColorBrush(Color.FromArgb(150, 240, 245, 255)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
                 BorderThickness = new Thickness(1.5),
-                CornerRadius = new CornerRadius(24),
+                CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(14, 8, 14, 8),
                 SnapsToDevicePixels = true,
                 Effect = new DropShadowEffect
@@ -180,8 +180,7 @@ namespace WidgUI
         {
             _dockPanel.Children.Clear();
 
-            // Capsule shape corner radius based on icon size
-            _cardBorder.CornerRadius = new CornerRadius((_iconSize + 28) / 2);
+            _cardBorder.CornerRadius = new CornerRadius(Math.Max(12, _iconSize / 3));
 
             if (_items.Count == 0)
             {

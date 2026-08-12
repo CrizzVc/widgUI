@@ -33,6 +33,12 @@ namespace WidgUI
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
 
+        [DllImport("user32.dll")]
+        private static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
+
+        [DllImport("user32.dll")]
+        private static extern bool UpdateWindow(IntPtr hWnd);
+
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TOOLWINDOW = 0x00000080;
         private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -111,6 +117,20 @@ namespace WidgUI
         private Window _wallpaperOverlay;
         private System.Windows.Controls.Image _overlayImage;
 
+        private static System.Windows.Media.FontFamily _iconFontFamily;
+
+        private static System.Windows.Media.FontFamily IconFontFamily
+        {
+            get
+            {
+                if (_iconFontFamily == null)
+                {
+                    _iconFontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets, Segoe Fluent Icons");
+                }
+                return _iconFontFamily;
+            }
+        }
+
         public EdgeMenuWindow(MainWindow mainWindow)
         {
             _mainWindow = mainWindow;
@@ -164,6 +184,128 @@ namespace WidgUI
             // Embed in desktop so it is only shown on the wallpaper, behind other apps
             DesktopManager.EmbedInDesktop(this);
             WidgetRegistry.EnsureEdgeMenuOnTop();
+            PreloadIconFont();
+            ForceMenuRepaint();
+        }
+
+        private TextBlock CreateIconGlyph(string glyph, double fontSize)
+        {
+            TextBlock textBlock = new TextBlock
+            {
+                Text = glyph,
+                FontFamily = IconFontFamily,
+                FontSize = fontSize,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                SnapsToDevicePixels = true
+            };
+            TextOptions.SetTextFormattingMode(textBlock, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(textBlock, TextRenderingMode.ClearType);
+            return textBlock;
+        }
+
+        private void PreloadIconFont()
+        {
+            try
+            {
+                Typeface typeface = new Typeface(IconFontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                GlyphTypeface glyphTypeface;
+                typeface.TryGetGlyphTypeface(out glyphTypeface);
+            }
+            catch
+            {
+                // Font preload is best-effort.
+            }
+        }
+
+        private void ForceMenuRepaint()
+        {
+            InvalidateVisual();
+            UpdateLayout();
+
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                InvalidateRect(hwnd, IntPtr.Zero, false);
+                UpdateWindow(hwnd);
+            }
+
+            if (_menuBorder != null)
+            {
+                InvalidateIconVisuals(_menuBorder);
+            }
+        }
+
+        private void InvalidateIconVisuals(DependencyObject root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            TextBlock textBlock = root as TextBlock;
+            if (textBlock != null)
+            {
+                textBlock.InvalidateVisual();
+            }
+
+            int childCount = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < childCount; i++)
+            {
+                InvalidateIconVisuals(VisualTreeHelper.GetChild(root, i));
+            }
+        }
+
+        private void AnimateOpacity(UIElement element, double from, double to, TimeSpan duration, TimeSpan? beginTime, Action onComplete)
+        {
+            element.BeginAnimation(UIElement.OpacityProperty, null);
+            element.Opacity = from;
+
+            DoubleAnimation animation = new DoubleAnimation(from, to, duration)
+            {
+                FillBehavior = FillBehavior.Stop
+            };
+
+            if (beginTime.HasValue)
+            {
+                animation.BeginTime = beginTime.Value;
+            }
+
+            animation.Completed += (s, e) =>
+            {
+                element.Opacity = to;
+                element.BeginAnimation(UIElement.OpacityProperty, null);
+                if (onComplete != null)
+                {
+                    onComplete();
+                }
+            };
+
+            element.BeginAnimation(UIElement.OpacityProperty, animation);
+        }
+
+        private void ShowMainMenuButtons()
+        {
+            _appNameText.Visibility = Visibility.Collapsed;
+            _appNameText.BeginAnimation(UIElement.OpacityProperty, null);
+            _appNameText.Opacity = 0;
+
+            _buttonsGrid.Visibility = Visibility.Visible;
+            _buttonsGrid.BeginAnimation(UIElement.OpacityProperty, null);
+            _buttonsGrid.Opacity = 1;
+            ForceMenuRepaint();
+        }
+
+        private void ResetMainMenuButtons()
+        {
+            _buttonsGrid.BeginAnimation(UIElement.OpacityProperty, null);
+            _buttonsGrid.Opacity = 0;
+            _buttonsGrid.Visibility = Visibility.Collapsed;
+
+            _appNameText.Visibility = Visibility.Visible;
+            _appNameText.BeginAnimation(UIElement.OpacityProperty, null);
+            _appNameText.Opacity = 0;
         }
 
         private void EnableKeyboard()
@@ -387,15 +529,7 @@ namespace WidgUI
                 ToolTip = tooltip
             };
 
-            TextBlock textBlock = new TextBlock
-            {
-                Text = glyph,
-                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 15,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
+            TextBlock textBlock = CreateIconGlyph(glyph, 15);
             border.Child = textBlock;
 
             border.MouseEnter += (s, e) =>
@@ -428,15 +562,7 @@ namespace WidgUI
                 ToolTip = "Volver"
             };
 
-            TextBlock textBlock = new TextBlock
-            {
-                Text = "\uE72B", // Left arrow glyph
-                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 9,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
+            TextBlock textBlock = CreateIconGlyph("\uE72B", 9);
             border.Child = textBlock;
 
             border.MouseEnter += (s, e) =>
@@ -839,15 +965,7 @@ namespace WidgUI
                 Cursor = Cursors.Hand,
                 ToolTip = "Cambiar carpeta"
             };
-            TextBlock changeIcon = new TextBlock
-            {
-                Text = "\uE838", // Folder glyph in Segoe MDL2 Assets
-                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 9,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
+            TextBlock changeIcon = CreateIconGlyph("\uE838", 9);
             btnChangeFolder.Child = changeIcon;
             btnChangeFolder.MouseEnter += (s, e) =>
             {
@@ -1629,15 +1747,8 @@ namespace WidgUI
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            TextBlock icon = new TextBlock
-            {
-                Text = iconGlyph,
-                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 24,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
+            TextBlock icon = CreateIconGlyph(iconGlyph, 24);
+            icon.Margin = new Thickness(0, 0, 0, 8);
 
             TextBlock text = new TextBlock
             {
@@ -1664,15 +1775,7 @@ namespace WidgUI
                 Visibility = isActive && toggleAction != null ? Visibility.Visible : Visibility.Collapsed,
                 Cursor = Cursors.Hand
             };
-            TextBlock editIcon = new TextBlock
-            {
-                Text = "\uE70F", // Edit pencil glyph
-                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-                FontSize = 10,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
+            TextBlock editIcon = CreateIconGlyph("\uE70F", 10);
             editBtn.Child = editIcon;
 
             editBtn.MouseEnter += (s, e) => editBtn.Background = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
@@ -1719,13 +1822,11 @@ namespace WidgUI
 
             _activeSubPanel = panelName;
 
-            // 1. Hide main menu grid with animation
-            DoubleAnimation fadeOutMain = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(150));
-            fadeOutMain.Completed += (s, e) =>
+            AnimateOpacity(_mainMenuGrid, _mainMenuGrid.Opacity, 0, TimeSpan.FromMilliseconds(150), null, () =>
             {
                 _mainMenuGrid.Visibility = Visibility.Collapsed;
 
-                // 2. Setup the subpanel to be shown
+                // Setup the subpanel to be shown
                 _stylePanel.Visibility = Visibility.Collapsed;
                 _settingsPanel.Visibility = Visibility.Collapsed;
                 _wallpaperPanel.Visibility = Visibility.Collapsed;
@@ -1752,8 +1853,7 @@ namespace WidgUI
                     _wallpaperPanel.Visibility = Visibility.Visible;
                     LoadWallpaperPanelContent();
                     AnimateMenuSize(320, 480);
-                    
-                    // Ensure the window and scroll viewer have focus to receive keyboard events
+
                     this.Focus();
                     if (_thumbnailsScrollViewer != null)
                     {
@@ -1774,20 +1874,12 @@ namespace WidgUI
                     AnimateMenuSize(260, 360);
                 }
 
-                // 3. Make subpanel container visible but transparent
                 _subPanelContainer.Visibility = Visibility.Visible;
                 _subPanelContainer.Opacity = 0;
-                
-                EnableKeyboard();
 
-                // 4. Fade in the subpanel content
-                DoubleAnimation fadeInSub = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
-                {
-                    BeginTime = TimeSpan.FromMilliseconds(100) // slight delay for smooth width expansion
-                };
-                _subPanelContainer.BeginAnimation(Grid.OpacityProperty, fadeInSub);
-            };
-            _mainMenuGrid.BeginAnimation(Grid.OpacityProperty, fadeOutMain);
+                EnableKeyboard();
+                AnimateOpacity(_subPanelContainer, 0, 1, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(100), ForceMenuRepaint);
+            });
         }
 
         private void GoBackToMainMenu()
@@ -1795,27 +1887,15 @@ namespace WidgUI
             _activeSubPanel = null;
             DisableKeyboard();
 
-            // 1. Fade out subpanel container
-            DoubleAnimation fadeOutSub = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(150));
-            fadeOutSub.Completed += (s, e) =>
+            AnimateOpacity(_subPanelContainer, _subPanelContainer.Opacity, 0, TimeSpan.FromMilliseconds(150), null, () =>
             {
                 _subPanelContainer.Visibility = Visibility.Collapsed;
 
-                // 2. Make main menu visible but transparent
                 _mainMenuGrid.Visibility = Visibility.Visible;
-                _mainMenuGrid.Opacity = 0;
-
-                // 3. Animate back to main menu size
+                ShowMainMenuButtons();
                 AnimateMenuSize(62, 200);
-
-                // 4. Fade in main menu
-                DoubleAnimation fadeInMain = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200))
-                {
-                    BeginTime = TimeSpan.FromMilliseconds(100)
-                };
-                _mainMenuGrid.BeginAnimation(Grid.OpacityProperty, fadeInMain);
-            };
-            _subPanelContainer.BeginAnimation(Grid.OpacityProperty, fadeOutSub);
+                AnimateOpacity(_mainMenuGrid, 0, 1, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(100), ForceMenuRepaint);
+            });
         }
 
         private void AnimateMenuSize(double targetWidth, double targetHeight)
@@ -1860,25 +1940,19 @@ namespace WidgUI
             _menuBorder.Opacity = 1;
             _menuBorder.BeginAnimation(Border.OpacityProperty, null);
             
-            // Show App Name first
             _mainMenuGrid.Visibility = Visibility.Visible;
             _mainMenuGrid.Opacity = 1;
-            
-            _appNameText.Visibility = Visibility.Visible;
-            _appNameText.Opacity = 0;
-            _appNameText.BeginAnimation(TextBlock.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+            _mainMenuGrid.BeginAnimation(UIElement.OpacityProperty, null);
 
-            // Hide buttons first
-            _buttonsGrid.BeginAnimation(Grid.OpacityProperty, null); // Clear any pending fade in
-            _buttonsGrid.Visibility = Visibility.Collapsed;
-            _buttonsGrid.Opacity = 0;
+            ResetMainMenuButtons();
+            AnimateOpacity(_appNameText, 0, 1, TimeSpan.FromMilliseconds(220), null, null);
 
             // Hide subpanels if they were left open (safeguard)
             _subPanelContainer.Visibility = Visibility.Collapsed;
             _activeSubPanel = null;
 
-            // Wait 750ms before switching to buttons
             _hoverTimer.Start();
+            Dispatcher.BeginInvoke(new Action(ForceMenuRepaint), DispatcherPriority.Loaded);
         }
 
         private void EdgeMenuWindow_MouseLeave(object sender, MouseEventArgs e)
@@ -1922,16 +1996,17 @@ namespace WidgUI
             _hoverTimer.Stop();
             if (!_isHovered) return;
 
-            // Transition: Fade out app name, then fade in buttons
-            DoubleAnimation fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(180));
-            _appNameText.BeginAnimation(TextBlock.OpacityProperty, fadeOut);
+            AnimateOpacity(_appNameText, _appNameText.Opacity, 0, TimeSpan.FromMilliseconds(180), null, () =>
+            {
+                _appNameText.Visibility = Visibility.Collapsed;
+            });
 
             _buttonsGrid.Visibility = Visibility.Visible;
-            DoubleAnimation fadeIn = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+            AnimateOpacity(_buttonsGrid, 0, 1, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(150), () =>
             {
-                BeginTime = TimeSpan.FromMilliseconds(180)
-            };
-            _buttonsGrid.BeginAnimation(Grid.OpacityProperty, fadeIn);
+                ForceMenuRepaint();
+                Dispatcher.BeginInvoke(new Action(ForceMenuRepaint), DispatcherPriority.Render);
+            });
         }
         #endregion
     }

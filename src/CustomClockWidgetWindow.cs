@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using System.Windows.Forms; // for FontDialog
 using MessageBox = System.Windows.MessageBox;
@@ -95,19 +94,9 @@ namespace WidgUI
         {
             _cardBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(140, 240, 245, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(20),
-                Padding = new Thickness(20),
-                Effect = new DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    Direction = 270,
-                    ShadowDepth = 5,
-                    Opacity = 0.2,
-                    BlurRadius = 15
-                }
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0)
             };
 
             _timePanel = new StackPanel
@@ -179,8 +168,10 @@ namespace WidgUI
             _minutesText.Text = now.Minute.ToString("00");
             _amPmText.Text = ampm;
 
-            // Optional pulse for colon separator
-            _secondsSeparatorText.Visibility = (now.Second % 2 == 0) ? Visibility.Visible : Visibility.Hidden;
+            if (!_isVertical)
+            {
+                _secondsSeparatorText.Visibility = (now.Second % 2 == 0) ? Visibility.Visible : Visibility.Hidden;
+            }
         }
 
         private void UpdateLayoutMode()
@@ -196,12 +187,8 @@ namespace WidgUI
             if (_isVertical)
             {
                 _timePanel.Orientation = System.Windows.Controls.Orientation.Vertical;
-                _secondsSeparatorText.Text = "—";
-                _secondsSeparatorText.Margin = new Thickness(0, -4, 0, -4);
-                _secondsSeparatorText.Visibility = Visibility.Visible; // Always visible as line separator in vertical
 
                 _timePanel.Children.Add(_hoursText);
-                _timePanel.Children.Add(_secondsSeparatorText);
                 _timePanel.Children.Add(_minutesText);
                 
                 if (_showAmPm)
