@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -112,6 +114,13 @@ namespace WidgUI
         // Arrow key navigation
         private int _selectedThumbnailIndex = -1;
         private string[] _loadedImageFiles = new string[0];
+        private string _wallpaperFolderSnapshot;
+        private int _wallpaperLoadGeneration;
+        private bool _wallpaperPanelContentReady;
+        private const int WallpaperThumbnailBatchSize = 8;
+        private const int WallpaperThumbnailDecodeWidth = 180;
+        private static readonly Dictionary<string, BitmapSource> _wallpaperThumbnailCache =
+            new Dictionary<string, BitmapSource>(StringComparer.OrdinalIgnoreCase);
 
         // Smooth wallpaper transition overlay
         private Window _wallpaperOverlay;
@@ -186,6 +195,7 @@ namespace WidgUI
             WidgetRegistry.EnsureEdgeMenuOnTop();
             PreloadIconFont();
             ForceMenuRepaint();
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(PrefetchWallpaperPanelContent));
         }
 
         private TextBlock CreateIconGlyph(string glyph, double fontSize)
@@ -1026,6 +1036,7 @@ namespace WidgUI
                     {
                         _wallpaperFolderPath = path;
                         SaveWallpaperFolder(path);
+                        InvalidateWallpaperPanelCache();
                         LoadWallpaperPanelContent();
                     }
                 }
@@ -1091,6 +1102,7 @@ namespace WidgUI
             {
                 _wallpaperFolderPath = data.FolderPath;
                 SaveWallpaperFolder(data.FolderPath);
+                InvalidateWallpaperPanelCache();
             }
 
             if (!string.IsNullOrEmpty(data.ActiveWallpaperPath) && File.Exists(data.ActiveWallpaperPath))
@@ -1098,16 +1110,230 @@ namespace WidgUI
                 SetWallpaper(data.ActiveWallpaperPath);
                 _activeWallpaperPath = data.ActiveWallpaperPath;
             }
+
+            PrefetchWallpaperPanelContent();
         }
 
-        private void LoadWallpaperPanelContent()
+        private string GetWallpaperFolderPath()
         {
             if (string.IsNullOrEmpty(_wallpaperFolderPath))
             {
                 _wallpaperFolderPath = GetSavedWallpaperFolder();
             }
 
-            if (string.IsNullOrEmpty(_wallpaperFolderPath) || !Directory.Exists(_wallpaperFolderPath))
+            return _wallpaperFolderPath;
+        }
+
+        private void InvalidateWallpaperPanelCache()
+        {
+            _wallpaperFolderSnapshot = null;
+            _wallpaperPanelContentReady = false;
+            _wallpaperLoadGeneration++;
+        }
+
+        private void PrefetchWallpaperPanelContent()
+        {
+            string folderPath = GetWallpaperFolderPath();
+            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
+            {
+                return;
+            }
+
+            string snapshot = BuildWallpaperFolderSnapshot(folderPath);
+            if (_wallpaperPanelContentReady && string.Equals(snapshot, _wallpaperFolderSnapshot, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string[] files;
+                try
+                {
+                    files = GetWallpaperImageFiles(folderPath);
+                }
+                catch
+                {
+                    return;
+                }
+
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                {
+                    if (string.Equals(snapshot, _wallpaperFolderSnapshot, StringComparison.Ordinal) &&
+                        (_wallpaperPanelContentReady || (_loadedImageFiles != null && _loadedImageFiles.Length > 0)))
+                    {
+                        return;
+                    }
+
+                    _wallpaperFolderSnapshot = snapshot;
+                    StartWallpaperPanelLoad(files);
+                }));
+            });
+        }
+
+        private static string[] GetWallpaperImageFiles(string folderPath)
+        {
+            return Directory.GetFiles(folderPath, "*.*")
+                .Where(file => file.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                               file.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                               file.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                               file.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
+
+        private static string BuildWallpaperFolderSnapshot(string folderPath)
+        {
+            try
+            {
+                string[] files = GetWallpaperImageFiles(folderPath);
+                long newestTicks = Directory.GetLastWriteTimeUtc(folderPath).Ticks;
+
+                foreach (string file in files)
+                {
+                    long fileTicks = File.GetLastWriteTimeUtc(file).Ticks;
+                    if (fileTicks > newestTicks)
+                    {
+                        newestTicks = fileTicks;
+                    }
+                }
+
+                return folderPath + "|" + files.Length + "|" + newestTicks;
+            }
+            catch
+            {
+                return folderPath + "|0|0";
+            }
+        }
+
+        private void StartWallpaperPanelLoad(string[] files)
+        {
+            _wallpaperLoadGeneration++;
+            int generation = _wallpaperLoadGeneration;
+            _wallpaperPanelContentReady = false;
+            _loadedImageFiles = files ?? new string[0];
+            _selectedThumbnailIndex = -1;
+            _thumbnailsStackPanel.Children.Clear();
+
+            if (_loadedImageFiles.Length == 0)
+            {
+                TextBlock noImagesText = new TextBlock
+                {
+                    Text = "Sin imágenes en la carpeta.",
+                    Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
+                    FontSize = 9,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(10, 20, 10, 20)
+                };
+                _thumbnailsStackPanel.Children.Add(noImagesText);
+                _wallpaperPanelContentReady = true;
+                UpdateWallpaperLoadingLabel(0, 0, false);
+                return;
+            }
+
+            UpdateWallpaperLoadingLabel(0, _loadedImageFiles.Length, true);
+
+            int index = 0;
+            Action loadBatch = null;
+            loadBatch = () =>
+            {
+                if (generation != _wallpaperLoadGeneration)
+                {
+                    return;
+                }
+
+                int end = Math.Min(index + WallpaperThumbnailBatchSize, _loadedImageFiles.Length);
+                for (; index < end; index++)
+                {
+                    _thumbnailsStackPanel.Children.Add(CreateThumbnail(_loadedImageFiles[index]));
+                }
+
+                UpdateWallpaperLoadingLabel(index, _loadedImageFiles.Length, index < _loadedImageFiles.Length);
+
+                if (index < _loadedImageFiles.Length)
+                {
+                    Dispatcher.BeginInvoke(DispatcherPriority.Background, loadBatch);
+                }
+                else
+                {
+                    _wallpaperPanelContentReady = true;
+                    RestoreWallpaperSelectionHighlights();
+                }
+            };
+
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, loadBatch);
+        }
+
+        private void UpdateWallpaperLoadingLabel(int loadedCount, int totalCount, bool isLoading)
+        {
+            if (_folderPathText == null || string.IsNullOrEmpty(_wallpaperFolderPath))
+            {
+                return;
+            }
+
+            string folderName = Path.GetFileName(_wallpaperFolderPath);
+            if (isLoading && totalCount > 0)
+            {
+                _folderPathText.Text = "Carpeta: " + folderName + " (" + loadedCount + "/" + totalCount + ")";
+            }
+            else
+            {
+                _folderPathText.Text = "Carpeta: " + folderName;
+            }
+        }
+
+        private void RestoreWallpaperSelectionHighlights()
+        {
+            if (string.IsNullOrEmpty(_activeWallpaperPath) || _loadedImageFiles == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _loadedImageFiles.Length; i++)
+            {
+                if (string.Equals(_loadedImageFiles[i], _activeWallpaperPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i < _thumbnailsStackPanel.Children.Count)
+                    {
+                        SelectThumbnailByIndex(i);
+                    }
+                    else
+                    {
+                        _selectedThumbnailIndex = i;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        private static BitmapSource GetOrCreateWallpaperThumbnail(string filePath)
+        {
+            long writeTicks = File.GetLastWriteTimeUtc(filePath).Ticks;
+            string cacheKey = filePath + "|" + writeTicks;
+
+            BitmapSource cached;
+            if (_wallpaperThumbnailCache.TryGetValue(cacheKey, out cached))
+            {
+                return cached;
+            }
+
+            BitmapImage bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(filePath);
+            bitmap.DecodePixelWidth = WallpaperThumbnailDecodeWidth;
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+
+            _wallpaperThumbnailCache[cacheKey] = bitmap;
+            return bitmap;
+        }
+
+        private void LoadWallpaperPanelContent()
+        {
+            string folderPath = GetWallpaperFolderPath();
+
+            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
             {
                 _chooseFolderContainer.Visibility = Visibility.Visible;
                 _thumbnailsContainer.Visibility = Visibility.Collapsed;
@@ -1117,49 +1343,25 @@ namespace WidgUI
             _chooseFolderContainer.Visibility = Visibility.Collapsed;
             _thumbnailsContainer.Visibility = Visibility.Visible;
 
-            _folderPathText.Text = "Carpeta: " + Path.GetFileName(_wallpaperFolderPath);
-            _folderPathText.ToolTip = _wallpaperFolderPath;
+            _folderPathText.Text = "Carpeta: " + Path.GetFileName(folderPath);
+            _folderPathText.ToolTip = folderPath;
 
-            // Clear previous thumbnails
-            _thumbnailsStackPanel.Children.Clear();
+            string snapshot = BuildWallpaperFolderSnapshot(folderPath);
+            if (string.Equals(snapshot, _wallpaperFolderSnapshot, StringComparison.Ordinal) &&
+                (_wallpaperPanelContentReady || (_loadedImageFiles != null && _loadedImageFiles.Length > 0)))
+            {
+                RestoreWallpaperSelectionHighlights();
+                return;
+            }
 
-            // Load images from folder
             try
             {
-                string[] files = Directory.GetFiles(_wallpaperFolderPath, "*.*")
-                    .Where(file => file.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
-                                   file.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
-                                   file.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
-                                   file.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-
-                if (files.Length == 0)
-                {
-                    _loadedImageFiles = new string[0];
-                    _selectedThumbnailIndex = -1;
-                    TextBlock noImagesText = new TextBlock
-                    {
-                        Text = "Sin imágenes en la carpeta.",
-                        Foreground = new SolidColorBrush(Color.FromRgb(156, 163, 175)),
-                        FontSize = 9,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Margin = new Thickness(10, 20, 10, 20)
-                    };
-                    _thumbnailsStackPanel.Children.Add(noImagesText);
-                    return;
-                }
-
-                _loadedImageFiles = files;
-                _selectedThumbnailIndex = -1;
-
-                foreach (string file in files)
-                {
-                    Border thumbBorder = CreateThumbnail(file);
-                    _thumbnailsStackPanel.Children.Add(thumbBorder);
-                }
+                _wallpaperFolderSnapshot = snapshot;
+                StartWallpaperPanelLoad(GetWallpaperImageFiles(folderPath));
             }
             catch (Exception ex)
             {
+                _thumbnailsStackPanel.Children.Clear();
                 TextBlock errText = new TextBlock
                 {
                     Text = "Error: " + ex.Message,
@@ -1196,14 +1398,7 @@ namespace WidgUI
             // Load BitmapImage with DecodePixelWidth for efficiency
             try
             {
-                BitmapImage bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(filePath);
-                bmp.DecodePixelWidth = 280;
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.CreateOptions = BitmapCreateOptions.DelayCreation;
-                bmp.EndInit();
-                img.Source = bmp;
+                img.Source = GetOrCreateWallpaperThumbnail(filePath);
             }
             catch
             {
