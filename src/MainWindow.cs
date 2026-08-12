@@ -36,6 +36,19 @@ namespace WidgUI
 
         private WidgetStyleVariant _currentVariant = WidgetStyleVariant.MinimalistVertical;
 
+        private Grid _rootGrid;
+        private Viewbox _contentViewbox;
+        private Grid _designHost;
+        private Border _resizeHandle;
+        private bool _isResizing;
+        private Point _resizeStartPoint;
+        private double _resizeStartWidth;
+        private double _resizeStartHeight;
+        private const double MinClockWidth = 120;
+        private const double MinClockHeight = 90;
+        private const double MaxClockWidth = 520;
+        private const double MaxClockHeight = 420;
+
         public MainWindow()
         {
             InitializeWindow();
@@ -83,6 +96,10 @@ namespace WidgUI
                 if (_isLocked != value)
                 {
                     _isLocked = value;
+                    if (_resizeHandle != null)
+                    {
+                        _resizeHandle.Visibility = _isLocked ? Visibility.Collapsed : Visibility.Visible;
+                    }
                     SetupContextMenu();
                 }
             }
@@ -121,11 +138,32 @@ namespace WidgUI
             // Allow dragging anywhere on the clock
             this.MouseLeftButtonDown += (s, e) =>
             {
-                if (!_isLocked && e.ButtonState == MouseButtonState.Pressed)
+                if (_isLocked || _isResizing || IsInteractiveTarget(e.OriginalSource as DependencyObject))
+                {
+                    return;
+                }
+
+                if (e.ButtonState == MouseButtonState.Pressed)
                 {
                     this.DragMove();
                 }
             };
+        }
+
+        private static bool IsInteractiveTarget(DependencyObject source)
+        {
+            while (source != null)
+            {
+                Border border = source as Border;
+                if (border != null && border.Cursor == Cursors.Hand)
+                {
+                    return true;
+                }
+
+                source = VisualTreeHelper.GetParent(source);
+            }
+
+            return false;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -249,7 +287,125 @@ namespace WidgUI
             _mainStack.Children.Add(_dateText);
 
             _cardBorder.Child = _mainStack;
-            this.Content = _cardBorder;
+            WrapContentForResize(_cardBorder, this.Width, this.Height);
+        }
+
+        private void WrapContentForResize(UIElement content, double designWidth, double designHeight)
+        {
+            _designHost = new Grid
+            {
+                Width = designWidth,
+                Height = designHeight
+            };
+            _designHost.Children.Add(content);
+
+            _rootGrid = new Grid();
+            _contentViewbox = new Viewbox
+            {
+                Stretch = Stretch.Fill,
+                StretchDirection = StretchDirection.Both
+            };
+            _contentViewbox.Child = _designHost;
+            _rootGrid.Children.Add(_contentViewbox);
+
+            _resizeHandle = CreateResizeHandle();
+            _rootGrid.Children.Add(_resizeHandle);
+
+            this.Content = _rootGrid;
+        }
+
+        private void UpdateDesignSize(double width, double height)
+        {
+            if (_designHost != null)
+            {
+                _designHost.Width = width;
+                _designHost.Height = height;
+            }
+        }
+
+        private Border CreateResizeHandle()
+        {
+            Border handle = new Border
+            {
+                Width = 18,
+                Height = 18,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Background = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                CornerRadius = new CornerRadius(4, 0, 0, 0),
+                Cursor = Cursors.SizeNWSE,
+                ToolTip = "Arrastra para cambiar tamano"
+            };
+
+            handle.Child = new TextBlock
+            {
+                Text = "\uE7E8",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 9,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            handle.MouseLeftButtonDown += ResizeHandle_MouseLeftButtonDown;
+            handle.MouseMove += ResizeHandle_MouseMove;
+            handle.MouseLeftButtonUp += ResizeHandle_MouseLeftButtonUp;
+            return handle;
+        }
+
+        private void ResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_isLocked)
+            {
+                return;
+            }
+
+            _isResizing = true;
+            _resizeStartPoint = e.GetPosition(this);
+            _resizeStartWidth = this.Width;
+            _resizeStartHeight = this.Height;
+            _resizeHandle.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void ResizeHandle_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isResizing)
+            {
+                return;
+            }
+
+            Point current = e.GetPosition(this);
+            double deltaX = current.X - _resizeStartPoint.X;
+            double deltaY = current.Y - _resizeStartPoint.Y;
+
+            this.Width = ClampClockSize(_resizeStartWidth + deltaX, true);
+            this.Height = ClampClockSize(_resizeStartHeight + deltaY, false);
+        }
+
+        private void ResizeHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isResizing)
+            {
+                return;
+            }
+
+            _isResizing = false;
+            _resizeHandle.ReleaseMouseCapture();
+        }
+
+        private static double ClampClockSize(double value, bool isWidth)
+        {
+            double min = isWidth ? MinClockWidth : MinClockHeight;
+            double max = isWidth ? MaxClockWidth : MaxClockHeight;
+            return Math.Max(min, Math.Min(max, value));
+        }
+
+        private void SetClockSize(double width, double height)
+        {
+            this.Width = ClampClockSize(width, true);
+            this.Height = ClampClockSize(height, false);
+            UpdateDesignSize(this.Width, this.Height);
         }
 
         public void ApplyStyleVariant(WidgetStyleVariant variant)
@@ -259,8 +415,7 @@ namespace WidgUI
             switch (variant)
             {
                 case WidgetStyleVariant.MinimalistVertical:
-                    this.Width = 170;
-                    this.Height = 230;
+                    SetClockSize(170, 230);
                     _cardBorder.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
                     _cardBorder.BorderBrush = Brushes.Transparent;
                     _cardBorder.BorderThickness = new Thickness(0);
@@ -282,8 +437,7 @@ namespace WidgUI
                     break;
 
                 case WidgetStyleVariant.GlassmorphismCard:
-                    this.Width = 190;
-                    this.Height = 240;
+                    SetClockSize(190, 240);
                     _cardBorder.Background = new SolidColorBrush(Color.FromArgb(120, 20, 25, 40));
                     _cardBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255));
                     _cardBorder.BorderThickness = new Thickness(1.5);
@@ -312,8 +466,7 @@ namespace WidgUI
                     break;
 
                 case WidgetStyleVariant.NeumorphismDark:
-                    this.Width = 190;
-                    this.Height = 240;
+                    SetClockSize(190, 240);
                     _cardBorder.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E1E2E"));
                     _cardBorder.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#313244"));
                     _cardBorder.BorderThickness = new Thickness(2);
@@ -342,8 +495,7 @@ namespace WidgUI
                     break;
 
                 case WidgetStyleVariant.HorizontalCompact:
-                    this.Width = 260;
-                    this.Height = 110;
+                    SetClockSize(260, 110);
                     _cardBorder.Background = new SolidColorBrush(Color.FromArgb(180, 15, 23, 42));
                     _cardBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 56, 189, 248));
                     _cardBorder.BorderThickness = new Thickness(1);
@@ -466,7 +618,7 @@ namespace WidgUI
             itemLock.IsChecked = _isLocked;
             itemLock.Click += (s, e) =>
             {
-                _isLocked = itemLock.IsChecked;
+                IsLocked = itemLock.IsChecked;
             };
 
             MenuItem itemExit = new MenuItem { Header = "Cerrar Widget" };
@@ -507,7 +659,9 @@ namespace WidgUI
                 ShowDate = _showDate,
                 IsLocked = _isLocked,
                 Left = this.Left,
-                Top = this.Top
+                Top = this.Top,
+                Width = this.Width,
+                Height = this.Height
             };
         }
 
@@ -528,6 +682,13 @@ namespace WidgUI
             IsLocked = data.IsLocked;
             this.Left = data.Left;
             this.Top = data.Top;
+
+            if (data.Width >= MinClockWidth && data.Height >= MinClockHeight)
+            {
+                this.Width = ClampClockSize(data.Width, true);
+                this.Height = ClampClockSize(data.Height, false);
+                UpdateDesignSize(this.Width, this.Height);
+            }
 
             if (data.Visible)
             {

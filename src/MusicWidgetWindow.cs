@@ -5,26 +5,46 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
 
 namespace WidgUI
 {
+    public enum MusicWidgetVariant
+    {
+        ControlCenter,
+        Immersive,
+        Compact
+    }
+
     public class MusicWidgetWindow : Window
     {
-        private const double WidgetWidth = 380;
-        private const double WidgetHeight = 162;
-
         private bool _isLocked;
         private bool _embeddedInDesktop = true;
         private bool _isSeeking;
+        private bool _isResizing;
         private MediaState _currentState = MediaState.Empty();
+        private MusicWidgetVariant _currentVariant = MusicWidgetVariant.ControlCenter;
+
+        private Grid _rootGrid;
+        private Viewbox _contentViewbox;
+        private Grid _designHost;
+        private Border _resizeHandle;
+        private Point _resizeStartPoint;
+        private double _resizeStartWidth;
+        private double _resizeStartHeight;
+        private double _minWidth = 280;
+        private double _minHeight = 120;
+        private double _maxWidth = 640;
+        private double _maxHeight = 320;
+        private double _designWidth = 380;
+        private double _designHeight = 162;
 
         private Border _cardBorder;
-        private Border _albumArtBorder;
         private System.Windows.Controls.Image _albumArtImage;
+        private System.Windows.Controls.Image _backgroundArtImage;
+        private System.Windows.Controls.Image _avatarImage;
         private TextBlock _placeholderIcon;
         private TextBlock _titleText;
         private TextBlock _artistText;
@@ -36,6 +56,7 @@ namespace WidgUI
         private Border _playPauseButton;
         private Border _prevButton;
         private Border _nextButton;
+        private TextBlock _outputIcon;
 
         private SystemMediaHelper _mediaHelper;
         private DispatcherTimer _progressTimer;
@@ -52,7 +73,7 @@ namespace WidgUI
         {
             _widgetId = Guid.NewGuid().ToString();
             InitializeWindow();
-            BuildUI();
+            ApplyVariant(MusicWidgetVariant.ControlCenter);
             SetupContextMenu();
             SetupTimers();
             this.Loaded += MusicWidgetWindow_Loaded;
@@ -73,16 +94,14 @@ namespace WidgUI
             this.Topmost = false;
             this.ShowInTaskbar = false;
             this.ResizeMode = ResizeMode.NoResize;
-            this.Width = WidgetWidth;
-            this.Height = WidgetHeight;
 
             double screenWidth = SystemParameters.PrimaryScreenWidth;
-            this.Left = screenWidth - this.Width - 50;
+            this.Left = screenWidth - 430;
             this.Top = 520;
 
             this.MouseLeftButtonDown += (s, e) =>
             {
-                if (_isLocked || IsInteractiveTarget(e.OriginalSource as DependencyObject))
+                if (_isLocked || _isResizing || IsInteractiveTarget(e.OriginalSource as DependencyObject))
                 {
                     return;
                 }
@@ -168,14 +187,188 @@ namespace WidgUI
             _equalizerTimer.Start();
         }
 
-        private void BuildUI()
+        public void ApplyVariant(MusicWidgetVariant variant)
         {
-            _cardBorder = new Border
+            _currentVariant = variant;
+            SetVariantSizeLimits(variant);
+
+            switch (variant)
             {
-                CornerRadius = new CornerRadius(22),
+                case MusicWidgetVariant.Immersive:
+                    SetWidgetSize(280, 280);
+                    BuildImmersiveUI();
+                    break;
+                case MusicWidgetVariant.Compact:
+                    SetWidgetSize(420, 118);
+                    BuildCompactUI();
+                    break;
+                default:
+                    SetWidgetSize(380, 162);
+                    BuildControlCenterUI();
+                    break;
+            }
+
+            SetupContextMenu();
+            MediaHelper_StateChanged(_currentState);
+        }
+
+        private void SetVariantSizeLimits(MusicWidgetVariant variant)
+        {
+            switch (variant)
+            {
+                case MusicWidgetVariant.Immersive:
+                    _minWidth = 180;
+                    _minHeight = 180;
+                    _maxWidth = 480;
+                    _maxHeight = 480;
+                    break;
+                case MusicWidgetVariant.Compact:
+                    _minWidth = 300;
+                    _minHeight = 90;
+                    _maxWidth = 760;
+                    _maxHeight = 220;
+                    break;
+                default:
+                    _minWidth = 280;
+                    _minHeight = 120;
+                    _maxWidth = 640;
+                    _maxHeight = 320;
+                    break;
+            }
+        }
+
+        private void SetWidgetSize(double width, double height)
+        {
+            _designWidth = width;
+            _designHeight = height;
+            this.Width = ClampWidgetSize(width, true);
+            this.Height = ClampWidgetSize(height, false);
+            UpdateDesignSize(this.Width, this.Height);
+        }
+
+        private void FinishResizableLayout(UIElement content)
+        {
+            _designHost = new Grid
+            {
+                Width = _designWidth,
+                Height = _designHeight
+            };
+            _designHost.Children.Add(content);
+
+            _rootGrid = new Grid();
+            _contentViewbox = new Viewbox
+            {
+                Stretch = Stretch.Fill,
+                StretchDirection = StretchDirection.Both
+            };
+            _contentViewbox.Child = _designHost;
+            _rootGrid.Children.Add(_contentViewbox);
+
+            _resizeHandle = CreateResizeHandle();
+            _rootGrid.Children.Add(_resizeHandle);
+
+            this.Content = _rootGrid;
+        }
+
+        private void UpdateDesignSize(double width, double height)
+        {
+            if (_designHost != null)
+            {
+                _designHost.Width = width;
+                _designHost.Height = height;
+            }
+        }
+
+        private Border CreateResizeHandle()
+        {
+            Border handle = new Border
+            {
+                Width = 18,
+                Height = 18,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Background = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                CornerRadius = new CornerRadius(4, 0, 0, 0),
+                Cursor = Cursors.Hand,
+                ToolTip = "Arrastra para cambiar tamano",
+                Visibility = _isLocked ? Visibility.Collapsed : Visibility.Visible
+            };
+
+            handle.Child = new TextBlock
+            {
+                Text = "\uE7E8",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 9,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            handle.MouseLeftButtonDown += ResizeHandle_MouseLeftButtonDown;
+            handle.MouseMove += ResizeHandle_MouseMove;
+            handle.MouseLeftButtonUp += ResizeHandle_MouseLeftButtonUp;
+            return handle;
+        }
+
+        private void ResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_isLocked)
+            {
+                return;
+            }
+
+            _isResizing = true;
+            _resizeStartPoint = e.GetPosition(this);
+            _resizeStartWidth = this.Width;
+            _resizeStartHeight = this.Height;
+            _resizeHandle.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void ResizeHandle_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isResizing)
+            {
+                return;
+            }
+
+            Point current = e.GetPosition(this);
+            double deltaX = current.X - _resizeStartPoint.X;
+            double deltaY = current.Y - _resizeStartPoint.Y;
+
+            this.Width = ClampWidgetSize(_resizeStartWidth + deltaX, true);
+            this.Height = ClampWidgetSize(_resizeStartHeight + deltaY, false);
+            UpdateDesignSize(this.Width, this.Height);
+        }
+
+        private void ResizeHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isResizing)
+            {
+                return;
+            }
+
+            _isResizing = false;
+            _resizeHandle.ReleaseMouseCapture();
+        }
+
+        private double ClampWidgetSize(double value, bool isWidth)
+        {
+            double min = isWidth ? _minWidth : _minHeight;
+            double max = isWidth ? _maxWidth : _maxHeight;
+            return Math.Max(min, Math.Min(max, value));
+        }
+
+        private Border CreateCardShell(double cornerRadius, Thickness padding, Thickness borderThickness)
+        {
+            return new Border
+            {
+                CornerRadius = new CornerRadius(cornerRadius),
                 Background = new SolidColorBrush(Color.FromArgb(210, 34, 34, 38)),
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(14, 12, 14, 12),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
+                BorderThickness = borderThickness,
+                Padding = padding,
+                ClipToBounds = true,
                 Effect = new DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -185,6 +378,11 @@ namespace WidgUI
                     BlurRadius = 18
                 }
             };
+        }
+
+        private void BuildControlCenterUI()
+        {
+            _cardBorder = CreateCardShell(22, new Thickness(14, 12, 14, 12), new Thickness(1));
 
             Grid root = new Grid();
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -197,14 +395,287 @@ namespace WidgUI
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            _albumArtBorder = new Border
+            Border albumArt = CreateAlbumArtBorder(54, 10);
+            StackPanel textPanel = CreateTitleArtistPanel(15, 12);
+            _equalizerPanel = CreateEqualizer();
+
+            Grid.SetColumn(albumArt, 0);
+            Grid.SetColumn(textPanel, 1);
+            Grid.SetColumn(_equalizerPanel, 2);
+            topRow.Children.Add(albumArt);
+            topRow.Children.Add(textPanel);
+            topRow.Children.Add(_equalizerPanel);
+
+            Grid progressRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            CreateProgressBar(4, 2);
+            progressRow.Children.Add(_progressTrack);
+
+            Grid timeRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            _elapsedText = CreateTimeLabel("0:00", HorizontalAlignment.Left, 11, new Thickness(0, 8, 0, 0));
+            _remainingText = CreateTimeLabel("-0:00", HorizontalAlignment.Right, 11, new Thickness(0, 8, 0, 0));
+            timeRow.Children.Add(_elapsedText);
+            timeRow.Children.Add(_remainingText);
+
+            Grid controlsRow = new Grid();
+            StackPanel controls = CreateTransportControls(28, 38, 20, 34, 38, false);
+            controlsRow.Children.Add(controls);
+
+            _outputIcon = new TextBlock
             {
-                Width = 54,
-                Height = 54,
-                CornerRadius = new CornerRadius(10),
+                Text = "\uE7F5",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 16,
+                Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 175)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            controlsRow.Children.Add(_outputIcon);
+
+            Grid.SetRow(topRow, 0);
+            Grid.SetRow(progressRow, 1);
+            Grid.SetRow(timeRow, 2);
+            Grid.SetRow(controlsRow, 3);
+            root.Children.Add(topRow);
+            root.Children.Add(progressRow);
+            root.Children.Add(timeRow);
+            root.Children.Add(controlsRow);
+
+            _cardBorder.Child = root;
+            FinishResizableLayout(_cardBorder);
+        }
+
+        private void BuildImmersiveUI()
+        {
+            _cardBorder = new Border
+            {
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
+                ClipToBounds = true
+            };
+
+            Grid root = new Grid();
+
+            Border placeholderBg = new Border
+            {
+                Name = "ImmersivePlaceholder",
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(55, 55, 60),
+                    Color.FromRgb(25, 25, 28),
+                    90)
+            };
+            root.Children.Add(placeholderBg);
+
+            _backgroundArtImage = new System.Windows.Controls.Image
+            {
+                Stretch = Stretch.UniformToFill,
+                Visibility = Visibility.Collapsed
+            };
+            RenderOptions.SetBitmapScalingMode(_backgroundArtImage, BitmapScalingMode.HighQuality);
+            root.Children.Add(_backgroundArtImage);
+
+            Border bottomFade = new Border
+            {
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Height = 130,
+                Background = new LinearGradientBrush(
+                    Color.FromArgb(0, 0, 0, 0),
+                    Color.FromArgb(210, 0, 0, 0),
+                    90)
+            };
+            root.Children.Add(bottomFade);
+
+            Grid overlay = new Grid { Margin = new Thickness(10) };
+            overlay.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            overlay.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            overlay.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            overlay.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            overlay.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            Grid topRow = new Grid();
+            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            Border artistPill = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(170, 20, 20, 22)),
+                CornerRadius = new CornerRadius(18),
+                Padding = new Thickness(4, 4, 12, 4),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                MaxWidth = 190
+            };
+
+            Grid pillGrid = new Grid();
+            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            pillGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border avatarBorder = new Border
+            {
+                Width = 28,
+                Height = 28,
+                CornerRadius = new CornerRadius(14),
                 Background = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
                 ClipToBounds = true,
-                Margin = new Thickness(0, 0, 12, 0)
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+
+            Grid avatarGrid = new Grid();
+            _avatarImage = new System.Windows.Controls.Image
+            {
+                Stretch = Stretch.UniformToFill,
+                Visibility = Visibility.Collapsed
+            };
+            RenderOptions.SetBitmapScalingMode(_avatarImage, BitmapScalingMode.HighQuality);
+            _placeholderIcon = new TextBlock
+            {
+                Text = "\uE8D6",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 12,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            avatarGrid.Children.Add(_avatarImage);
+            avatarGrid.Children.Add(_placeholderIcon);
+            avatarBorder.Child = avatarGrid;
+
+            StackPanel pillText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            _titleText = new TextBlock
+            {
+                Text = "Sin reproduccion",
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            _artistText = new TextBlock
+            {
+                Text = "Artista",
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            pillText.Children.Add(_titleText);
+            pillText.Children.Add(_artistText);
+
+            Grid.SetColumn(avatarBorder, 0);
+            Grid.SetColumn(pillText, 1);
+            pillGrid.Children.Add(avatarBorder);
+            pillGrid.Children.Add(pillText);
+            artistPill.Child = pillGrid;
+
+            StackPanel actionButtons = new StackPanel { Orientation = Orientation.Horizontal };
+            actionButtons.Children.Add(CreateIconCircle("\uE72D", 30));
+            actionButtons.Children.Add(CreateIconCircle("\uEB52", 30, new Thickness(6, 0, 0, 0)));
+
+            Grid.SetColumn(artistPill, 0);
+            Grid.SetColumn(actionButtons, 1);
+            topRow.Children.Add(artistPill);
+            topRow.Children.Add(actionButtons);
+
+            Grid progressRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            CreateProgressBar(3, 1.5);
+            progressRow.Children.Add(_progressTrack);
+
+            Grid timeRow = new Grid();
+            _elapsedText = CreateTimeLabel("0:00", HorizontalAlignment.Left, 10, new Thickness(0, 0, 0, 6));
+            _remainingText = CreateTimeLabel("-0:00", HorizontalAlignment.Right, 10, new Thickness(0, 0, 0, 6));
+            timeRow.Children.Add(_elapsedText);
+            timeRow.Children.Add(_remainingText);
+
+            StackPanel controls = CreateTransportControls(14, 16, 14, 36, 36, true);
+
+            Grid.SetRow(topRow, 0);
+            Grid.SetRow(progressRow, 2);
+            Grid.SetRow(timeRow, 3);
+            Grid.SetRow(controls, 4);
+            overlay.Children.Add(topRow);
+            overlay.Children.Add(progressRow);
+            overlay.Children.Add(timeRow);
+            overlay.Children.Add(controls);
+
+            root.Children.Add(overlay);
+            _cardBorder.Child = root;
+            FinishResizableLayout(_cardBorder);
+        }
+
+        private void BuildCompactUI()
+        {
+            _cardBorder = CreateCardShell(0, new Thickness(10), new Thickness(1));
+
+            Grid root = new Grid();
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border albumArt = CreateAlbumArtBorder(88, 0);
+            Grid.SetColumn(albumArt, 0);
+            root.Children.Add(albumArt);
+
+            Grid right = new Grid { Margin = new Thickness(12, 0, 0, 0) };
+            right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            Grid titleRow = new Grid();
+            StackPanel textPanel = CreateTitleArtistPanel(13, 10);
+            textPanel.VerticalAlignment = VerticalAlignment.Center;
+            titleRow.Children.Add(textPanel);
+
+            _outputIcon = new TextBlock
+            {
+                Text = "\uE7F5",
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Color.FromRgb(190, 190, 195)),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            titleRow.Children.Add(_outputIcon);
+
+            StackPanel controls = CreateTransportControls(12, 14, 12, 0, 0, false, HorizontalAlignment.Left);
+            controls.Margin = new Thickness(0, 2, 0, 2);
+
+            Grid progressBlock = new Grid();
+            CreateProgressBar(5, 0);
+            _progressTrack.Margin = new Thickness(0, 0, 0, 2);
+            progressBlock.Children.Add(_progressTrack);
+
+            Grid timeRow = new Grid();
+            _elapsedText = CreateTimeLabel("-:--", HorizontalAlignment.Left, 9, new Thickness(0));
+            _remainingText = CreateTimeLabel("-:--", HorizontalAlignment.Right, 9, new Thickness(0));
+            timeRow.Children.Add(_elapsedText);
+            timeRow.Children.Add(_remainingText);
+
+            Grid.SetRow(titleRow, 0);
+            Grid.SetRow(controls, 1);
+            Grid.SetRow(progressBlock, 2);
+            Grid.SetRow(timeRow, 3);
+            right.Children.Add(titleRow);
+            right.Children.Add(controls);
+            right.Children.Add(progressBlock);
+            right.Children.Add(timeRow);
+
+            Grid.SetColumn(right, 1);
+            root.Children.Add(right);
+
+            _equalizerPanel = null;
+            _backgroundArtImage = null;
+            _avatarImage = null;
+
+            _cardBorder.Child = root;
+            FinishResizableLayout(_cardBorder);
+        }
+
+        private Border CreateAlbumArtBorder(double size, double radius)
+        {
+            Border border = new Border
+            {
+                Width = size,
+                Height = size,
+                CornerRadius = new CornerRadius(radius),
+                Background = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                ClipToBounds = true
             };
 
             Grid artGrid = new Grid();
@@ -219,7 +690,7 @@ namespace WidgUI
             {
                 Text = "\uE8D6",
                 FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = 24,
+                FontSize = size * 0.42,
                 Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
@@ -227,13 +698,17 @@ namespace WidgUI
 
             artGrid.Children.Add(_albumArtImage);
             artGrid.Children.Add(_placeholderIcon);
-            _albumArtBorder.Child = artGrid;
+            border.Child = artGrid;
+            return border;
+        }
 
-            StackPanel textPanel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        private StackPanel CreateTitleArtistPanel(double titleSize, double artistSize)
+        {
+            StackPanel textPanel = new StackPanel();
             _titleText = new TextBlock
             {
                 Text = "Sin reproduccion",
-                FontSize = 15,
+                FontSize = titleSize,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = Brushes.White,
                 TextTrimming = TextTrimming.CharacterEllipsis
@@ -241,91 +716,101 @@ namespace WidgUI
             _artistText = new TextBlock
             {
                 Text = "Reproduce musica en tu PC",
-                FontSize = 12,
+                FontSize = artistSize,
                 Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 175)),
-                Margin = new Thickness(0, 3, 0, 0),
+                Margin = new Thickness(0, 2, 0, 0),
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
             textPanel.Children.Add(_titleText);
             textPanel.Children.Add(_artistText);
+            return textPanel;
+        }
 
-            _equalizerPanel = CreateEqualizer();
-
-            Grid.SetColumn(_albumArtBorder, 0);
-            Grid.SetColumn(textPanel, 1);
-            Grid.SetColumn(_equalizerPanel, 2);
-            topRow.Children.Add(_albumArtBorder);
-            topRow.Children.Add(textPanel);
-            topRow.Children.Add(_equalizerPanel);
-
-            Grid progressRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        private void CreateProgressBar(double height, double radius)
+        {
             _progressTrack = new Border
             {
-                Height = 4,
-                CornerRadius = new CornerRadius(2),
+                Height = height,
+                CornerRadius = new CornerRadius(radius),
                 Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
                 Cursor = Cursors.Hand
             };
             _progressFill = new Border
             {
                 Width = 0,
-                Height = 4,
-                CornerRadius = new CornerRadius(2),
-                Background = new SolidColorBrush(Color.FromRgb(210, 210, 215)),
+                Height = height,
+                CornerRadius = new CornerRadius(radius),
+                Background = new SolidColorBrush(Color.FromRgb(230, 230, 235)),
                 HorizontalAlignment = HorizontalAlignment.Left
             };
             _progressTrack.Child = _progressFill;
             _progressTrack.MouseLeftButtonDown += ProgressTrack_MouseLeftButtonDown;
             _progressTrack.MouseLeftButtonUp += ProgressTrack_MouseLeftButtonUp;
             _progressTrack.MouseMove += ProgressTrack_MouseMove;
-            progressRow.Children.Add(_progressTrack);
+        }
 
-            Grid timeRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            _elapsedText = CreateTimeLabel("0:00", HorizontalAlignment.Left);
-            _remainingText = CreateTimeLabel("-0:00", HorizontalAlignment.Right);
-            timeRow.Children.Add(_elapsedText);
-            timeRow.Children.Add(_remainingText);
+        private StackPanel CreateTransportControls(
+            double sideFont,
+            double playFont,
+            double circleSize,
+            double sideButtonSize,
+            double playButtonSize,
+            bool darkCircles)
+        {
+            return CreateTransportControls(sideFont, playFont, circleSize, sideButtonSize, playButtonSize, darkCircles, HorizontalAlignment.Center);
+        }
 
-            Grid controlsRow = new Grid();
+        private StackPanel CreateTransportControls(
+            double sideFont,
+            double playFont,
+            double circleSize,
+            double sideButtonSize,
+            double playButtonSize,
+            bool darkCircles,
+            HorizontalAlignment alignment)
+        {
             StackPanel controls = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Center,
+                HorizontalAlignment = alignment,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            _prevButton = CreateControlButton("\uE892", 28, () => _mediaHelper.SkipPrevious());
-            _playPauseButton = CreatePlayPauseButton();
-            _nextButton = CreateControlButton("\uE893", 28, () => _mediaHelper.SkipNext());
+            _prevButton = CreateControlButton("\uE892", sideFont, () => _mediaHelper.SkipPrevious(), sideButtonSize, darkCircles);
+            _playPauseButton = CreatePlayPauseButton(playFont, playButtonSize, darkCircles);
+            _nextButton = CreateControlButton("\uE893", sideFont, () => _mediaHelper.SkipNext(), sideButtonSize, darkCircles);
 
             controls.Children.Add(_prevButton);
             controls.Children.Add(_playPauseButton);
             controls.Children.Add(_nextButton);
-            controlsRow.Children.Add(controls);
+            return controls;
+        }
 
-            TextBlock outputIcon = new TextBlock
+        private Border CreateIconCircle(string glyph, double size, Thickness margin)
+        {
+            Border circle = new Border
             {
-                Text = "\uE7F5",
+                Width = size,
+                Height = size,
+                CornerRadius = new CornerRadius(size / 2),
+                Background = new SolidColorBrush(Color.FromArgb(170, 20, 20, 22)),
+                Margin = margin
+            };
+            circle.Child = new TextBlock
+            {
+                Text = glyph,
                 FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = 16,
-                Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 175)),
-                HorizontalAlignment = HorizontalAlignment.Right,
+                FontSize = 12,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            controlsRow.Children.Add(outputIcon);
+            return circle;
+        }
 
-            Grid.SetRow(topRow, 0);
-            Grid.SetRow(progressRow, 1);
-            Grid.SetRow(timeRow, 2);
-            Grid.SetRow(controlsRow, 3);
-
-            root.Children.Add(topRow);
-            root.Children.Add(progressRow);
-            root.Children.Add(timeRow);
-            root.Children.Add(controlsRow);
-
-            _cardBorder.Child = root;
-            this.Content = _cardBorder;
+        private Border CreateIconCircle(string glyph, double size)
+        {
+            return CreateIconCircle(glyph, size, new Thickness(0));
         }
 
         private StackPanel CreateEqualizer()
@@ -348,7 +833,6 @@ namespace WidgUI
                     Margin = new Thickness(2, 0, 2, 0),
                     VerticalAlignment = VerticalAlignment.Bottom
                 };
-                bar.Tag = i;
                 panel.Children.Add(bar);
             }
 
@@ -357,6 +841,11 @@ namespace WidgUI
 
         private void AnimateEqualizer()
         {
+            if (_equalizerPanel == null)
+            {
+                return;
+            }
+
             bool active = _currentState.HasSession && _currentState.IsPlaying;
 
             foreach (UIElement child in _equalizerPanel.Children)
@@ -375,27 +864,29 @@ namespace WidgUI
             }
         }
 
-        private TextBlock CreateTimeLabel(string text, HorizontalAlignment alignment)
+        private TextBlock CreateTimeLabel(string text, HorizontalAlignment alignment, double fontSize, Thickness margin)
         {
             return new TextBlock
             {
                 Text = text,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 175)),
+                FontSize = fontSize,
+                Foreground = Brushes.White,
                 HorizontalAlignment = alignment,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(0, 8, 0, 0)
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = margin
             };
         }
 
-        private Border CreateControlButton(string glyph, double fontSize, Action action)
+        private Border CreateControlButton(string glyph, double fontSize, Action action, double size, bool darkCircle)
         {
             Border button = new Border
             {
-                Width = 34,
-                Height = 34,
-                CornerRadius = new CornerRadius(17),
-                Background = Brushes.Transparent,
+                Width = size > 0 ? size : 34,
+                Height = size > 0 ? size : 34,
+                CornerRadius = new CornerRadius((size > 0 ? size : 34) / 2),
+                Background = darkCircle
+                    ? new SolidColorBrush(Color.FromArgb(170, 20, 20, 22))
+                    : Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 Margin = new Thickness(6, 0, 6, 0)
             };
@@ -411,8 +902,12 @@ namespace WidgUI
             };
             button.Child = icon;
 
-            button.MouseEnter += (s, e) => button.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-            button.MouseLeave += (s, e) => button.Background = Brushes.Transparent;
+            if (!darkCircle)
+            {
+                button.MouseEnter += (s, e) => button.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                button.MouseLeave += (s, e) => button.Background = Brushes.Transparent;
+            }
+
             button.MouseLeftButtonDown += (s, e) =>
             {
                 e.Handled = true;
@@ -425,32 +920,37 @@ namespace WidgUI
             return button;
         }
 
-        private Border CreatePlayPauseButton()
+        private Border CreatePlayPauseButton(double fontSize, double size, bool darkCircle)
         {
             Border button = new Border
             {
-                Width = 38,
-                Height = 38,
-                CornerRadius = new CornerRadius(19),
-                Background = Brushes.Transparent,
+                Width = size > 0 ? size : 38,
+                Height = size > 0 ? size : 38,
+                CornerRadius = new CornerRadius((size > 0 ? size : 38) / 2),
+                Background = darkCircle
+                    ? new SolidColorBrush(Color.FromArgb(170, 20, 20, 22))
+                    : Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 Margin = new Thickness(6, 0, 6, 0)
             };
 
             TextBlock icon = new TextBlock
             {
-                Name = "PlayPauseIcon",
                 Text = "\uE768",
                 FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = 20,
+                FontSize = fontSize,
                 Foreground = Brushes.White,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
             button.Child = icon;
 
-            button.MouseEnter += (s, e) => button.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
-            button.MouseLeave += (s, e) => button.Background = Brushes.Transparent;
+            if (!darkCircle)
+            {
+                button.MouseEnter += (s, e) => button.Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
+                button.MouseLeave += (s, e) => button.Background = Brushes.Transparent;
+            }
+
             button.MouseLeftButtonDown += (s, e) =>
             {
                 e.Handled = true;
@@ -523,29 +1023,29 @@ namespace WidgUI
             if (!string.IsNullOrEmpty(state.Title))
             {
                 _currentState.Title = state.Title;
-                _titleText.Text = state.Title;
+                if (_titleText != null)
+                {
+                    _titleText.Text = state.Title;
+                }
             }
 
             if (!string.IsNullOrEmpty(state.Artist))
             {
                 _currentState.Artist = state.Artist;
-                _artistText.Text = state.Artist;
+                if (_artistText != null)
+                {
+                    if (_currentVariant == MusicWidgetVariant.Immersive)
+                    {
+                        _artistText.Text = "@" + BuildHandle(state.Artist);
+                    }
+                    else
+                    {
+                        _artistText.Text = state.Artist;
+                    }
+                }
             }
 
-            if (state.AlbumArt != null)
-            {
-                _currentState.AlbumArt = state.AlbumArt;
-                _albumArtImage.Source = state.AlbumArt;
-                _albumArtImage.Visibility = Visibility.Visible;
-                _placeholderIcon.Visibility = Visibility.Collapsed;
-            }
-            else if (!state.HasSession)
-            {
-                _currentState.AlbumArt = null;
-                _albumArtImage.Source = null;
-                _albumArtImage.Visibility = Visibility.Collapsed;
-                _placeholderIcon.Visibility = Visibility.Visible;
-            }
+            UpdateAlbumArt(state);
 
             _currentState.HasSession = state.HasSession;
             _currentState.IsPlaying = state.IsPlaying;
@@ -560,16 +1060,134 @@ namespace WidgUI
                 _currentState.Duration = state.Duration;
                 ApplyTimeline(_currentState, true);
             }
+            else if (_currentVariant == MusicWidgetVariant.Compact && !state.HasSession)
+            {
+                if (_elapsedText != null) _elapsedText.Text = "-:--";
+                if (_remainingText != null) _remainingText.Text = "-:--";
+            }
 
             UpdateControls(state);
         }
 
+        private void UpdateAlbumArt(MediaState state)
+        {
+            if (state.AlbumArt != null)
+            {
+                _currentState.AlbumArt = state.AlbumArt;
+
+                if (_albumArtImage != null)
+                {
+                    _albumArtImage.Source = state.AlbumArt;
+                    _albumArtImage.Visibility = Visibility.Visible;
+                }
+
+                if (_backgroundArtImage != null)
+                {
+                    _backgroundArtImage.Source = state.AlbumArt;
+                    _backgroundArtImage.Visibility = Visibility.Visible;
+                    Border placeholder = FindPlaceholderBackground();
+                    if (placeholder != null)
+                    {
+                        placeholder.Visibility = Visibility.Collapsed;
+                    }
+                }
+
+                if (_avatarImage != null)
+                {
+                    _avatarImage.Source = state.AlbumArt;
+                    _avatarImage.Visibility = Visibility.Visible;
+                }
+
+                if (_placeholderIcon != null)
+                {
+                    _placeholderIcon.Visibility = Visibility.Collapsed;
+                }
+            }
+            else if (!state.HasSession)
+            {
+                _currentState.AlbumArt = null;
+
+                if (_albumArtImage != null)
+                {
+                    _albumArtImage.Source = null;
+                    _albumArtImage.Visibility = Visibility.Collapsed;
+                }
+
+                if (_backgroundArtImage != null)
+                {
+                    _backgroundArtImage.Source = null;
+                    _backgroundArtImage.Visibility = Visibility.Collapsed;
+                    Border placeholder = FindPlaceholderBackground();
+                    if (placeholder != null)
+                    {
+                        placeholder.Visibility = Visibility.Visible;
+                    }
+                }
+
+                if (_avatarImage != null)
+                {
+                    _avatarImage.Source = null;
+                    _avatarImage.Visibility = Visibility.Collapsed;
+                }
+
+                if (_placeholderIcon != null)
+                {
+                    _placeholderIcon.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private Border FindPlaceholderBackground()
+        {
+            if (_cardBorder == null || _cardBorder.Child == null)
+            {
+                return null;
+            }
+
+            Grid root = _cardBorder.Child as Grid;
+            if (root == null || root.Children.Count == 0)
+            {
+                return null;
+            }
+
+            return root.Children[0] as Border;
+        }
+
+        private static string BuildHandle(string artist)
+        {
+            if (string.IsNullOrWhiteSpace(artist))
+            {
+                return "artista";
+            }
+
+            string handle = artist.ToLowerInvariant().Replace(" ", string.Empty);
+            if (handle.Length > 14)
+            {
+                handle = handle.Substring(0, 14);
+            }
+
+            return handle;
+        }
+
         private void ApplyTimeline(MediaState state, bool updateRemainingFromState)
         {
-            if (updateRemainingFromState)
+            if (updateRemainingFromState && _elapsedText != null && _remainingText != null)
             {
-                _elapsedText.Text = FormatTime(state.Position);
-                _remainingText.Text = "-" + FormatTime(GetRemaining(state));
+                if (state.HasSession && state.Duration > TimeSpan.Zero)
+                {
+                    _elapsedText.Text = FormatTime(state.Position);
+                    _remainingText.Text = "-" + FormatTime(GetRemaining(state));
+                }
+                else if (_currentVariant == MusicWidgetVariant.Compact)
+                {
+                    _elapsedText.Text = "-:--";
+                    _remainingText.Text = "-:--";
+                }
+                else
+                {
+                    _elapsedText.Text = "0:00";
+                    _remainingText.Text = "-0:00";
+                }
             }
 
             double percent = 0;
@@ -589,10 +1207,15 @@ namespace WidgUI
 
         private void UpdateProgressVisual(double percent)
         {
+            if (_progressTrack == null || _progressFill == null)
+            {
+                return;
+            }
+
             double width = _progressTrack.ActualWidth;
             if (width <= 0)
             {
-                width = WidgetWidth - 28;
+                width = this.Width - 28;
             }
 
             _progressFill.Width = Math.Max(0, Math.Min(width, width * percent));
@@ -600,6 +1223,11 @@ namespace WidgUI
 
         private void UpdateControls(MediaState state)
         {
+            if (_playPauseButton == null)
+            {
+                return;
+            }
+
             TextBlock icon = _playPauseButton.Child as TextBlock;
             if (icon != null)
             {
@@ -624,21 +1252,51 @@ namespace WidgUI
 
         private void SetupContextMenu()
         {
+            if (_cardBorder == null)
+            {
+                return;
+            }
+
             ContextMenu cm = new ContextMenu();
+
+            MenuItem itemVariants = new MenuItem { Header = "Estilo" };
+            itemVariants.Items.Add(CreateVariantMenuItem("Centro de control", MusicWidgetVariant.ControlCenter));
+            itemVariants.Items.Add(CreateVariantMenuItem("Inmersivo", MusicWidgetVariant.Immersive));
+            itemVariants.Items.Add(CreateVariantMenuItem("Compacto", MusicWidgetVariant.Compact));
 
             MenuItem itemLock = new MenuItem { Header = "Bloquear posicion" };
             itemLock.IsCheckable = true;
             itemLock.IsChecked = _isLocked;
-            itemLock.Click += (s, e) => { _isLocked = itemLock.IsChecked; };
+            itemLock.Click += (s, e) =>
+            {
+                _isLocked = itemLock.IsChecked;
+                if (_resizeHandle != null)
+                {
+                    _resizeHandle.Visibility = _isLocked ? Visibility.Collapsed : Visibility.Visible;
+                }
+            };
 
             MenuItem itemExit = new MenuItem { Header = "Cerrar widget" };
             itemExit.Click += (s, e) => this.Close();
 
+            cm.Items.Add(itemVariants);
             cm.Items.Add(itemLock);
             cm.Items.Add(new Separator());
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
+        }
+
+        private MenuItem CreateVariantMenuItem(string label, MusicWidgetVariant variant)
+        {
+            MenuItem item = new MenuItem
+            {
+                Header = label,
+                IsCheckable = true,
+                IsChecked = _currentVariant == variant
+            };
+            item.Click += (s, e) => ApplyVariant(variant);
+            return item;
         }
 
         public MusicWidgetLayoutData ToLayoutData()
@@ -648,7 +1306,10 @@ namespace WidgUI
                 Id = _widgetId,
                 IsLocked = _isLocked,
                 Left = this.Left,
-                Top = this.Top
+                Top = this.Top,
+                StyleVariant = (int)_currentVariant,
+                Width = this.Width,
+                Height = this.Height
             };
         }
 
@@ -664,9 +1325,26 @@ namespace WidgUI
                 _widgetId = data.Id;
             }
 
+            if (Enum.IsDefined(typeof(MusicWidgetVariant), data.StyleVariant))
+            {
+                ApplyVariant((MusicWidgetVariant)data.StyleVariant);
+            }
+
             this.Left = data.Left;
             this.Top = data.Top;
             _isLocked = data.IsLocked;
+
+            if (data.Width >= _minWidth && data.Height >= _minHeight)
+            {
+                this.Width = ClampWidgetSize(data.Width, true);
+                this.Height = ClampWidgetSize(data.Height, false);
+                UpdateDesignSize(this.Width, this.Height);
+            }
+
+            if (_resizeHandle != null)
+            {
+                _resizeHandle.Visibility = _isLocked ? Visibility.Collapsed : Visibility.Visible;
+            }
         }
     }
 }

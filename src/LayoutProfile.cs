@@ -63,6 +63,12 @@ namespace WidgUI
 
         [DataMember(Name = "top")]
         public double Top { get; set; }
+
+        [DataMember(Name = "width")]
+        public double Width { get; set; }
+
+        [DataMember(Name = "height")]
+        public double Height { get; set; }
     }
 
     [DataContract]
@@ -138,5 +144,14 @@ namespace WidgUI
 
         [DataMember(Name = "top")]
         public double Top { get; set; }
+
+        [DataMember(Name = "styleVariant")]
+        public int StyleVariant { get; set; }
+
+        [DataMember(Name = "width")]
+        public double Width { get; set; }
+
+        [DataMember(Name = "height")]
+        public double Height { get; set; }
     }
 }
