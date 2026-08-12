@@ -160,6 +160,7 @@ namespace WidgUI
             
             // Embed in desktop so it is only shown on the wallpaper, behind other apps
             DesktopManager.EmbedInDesktop(this);
+            WidgetRegistry.EnsureEdgeMenuOnTop();
         }
 
         private void EnableKeyboard()
@@ -1807,6 +1808,8 @@ namespace WidgUI
 
             _isHovered = true;
             _hoverTimer.Stop();
+
+            WidgetRegistry.EnsureEdgeMenuOnTop();
 
             // Expands immediately to main size (62x200)
             AnimateMenuSize(62, 200);

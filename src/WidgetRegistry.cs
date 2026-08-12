@@ -18,6 +18,33 @@ namespace WidgUI
         {
             _clock = clock;
             _edgeMenu = edgeMenu;
+
+            if (_clock != null)
+            {
+                _clock.Loaded += (s, e) => EnsureEdgeMenuOnTop();
+            }
+        }
+
+        public static void EnsureEdgeMenuOnTop()
+        {
+            if (_edgeMenu == null)
+            {
+                return;
+            }
+
+            List<Window> stack = new List<Window>();
+
+            if (_clock != null)
+            {
+                stack.Add(_clock);
+            }
+
+            stack.AddRange(_folderWidgets);
+            stack.AddRange(_imageWidgets);
+            stack.AddRange(_musicWidgets);
+            stack.Add(_edgeMenu);
+
+            DesktopManager.StackWindows(stack);
         }
 
         public static LayoutProfile CaptureCurrentLayout(string profileName)
@@ -77,6 +104,8 @@ namespace WidgUI
                     OpenMusicWidget(data);
                 }
             }
+
+            EnsureEdgeMenuOnTop();
         }
 
         public static void LoadLastProfileIfAvailable()
@@ -143,6 +172,7 @@ namespace WidgUI
 
             _folderWidgets.Add(widget);
             widget.Closed += FolderWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
         }
 
         public static void RegisterImageWidget(ImageWidgetWindow widget)
@@ -154,6 +184,7 @@ namespace WidgUI
 
             _imageWidgets.Add(widget);
             widget.Closed += ImageWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
         }
 
         public static void RegisterMusicWidget(MusicWidgetWindow widget)
@@ -165,6 +196,12 @@ namespace WidgUI
 
             _musicWidgets.Add(widget);
             widget.Closed += MusicWidget_Closed;
+            widget.Loaded += Widget_Loaded_EnsureEdgeMenuOnTop;
+        }
+
+        private static void Widget_Loaded_EnsureEdgeMenuOnTop(object sender, RoutedEventArgs e)
+        {
+            EnsureEdgeMenuOnTop();
         }
 
         private static void FolderWidget_Closed(object sender, EventArgs e)

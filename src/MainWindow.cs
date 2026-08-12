@@ -44,6 +44,7 @@ namespace WidgUI
         private Point _resizeStartPoint;
         private double _resizeStartWidth;
         private double _resizeStartHeight;
+        private double _aspectRatio = 170.0 / 230.0;
         private const double MinClockWidth = 120;
         private const double MinClockHeight = 90;
         private const double MaxClockWidth = 520;
@@ -364,6 +365,7 @@ namespace WidgUI
             _resizeStartPoint = e.GetPosition(this);
             _resizeStartWidth = this.Width;
             _resizeStartHeight = this.Height;
+            _aspectRatio = _resizeStartWidth / _resizeStartHeight;
             _resizeHandle.CaptureMouse();
             e.Handled = true;
         }
@@ -378,9 +380,20 @@ namespace WidgUI
             Point current = e.GetPosition(this);
             double deltaX = current.X - _resizeStartPoint.X;
             double deltaY = current.Y - _resizeStartPoint.Y;
+            double delta = Math.Abs(deltaX) >= Math.Abs(deltaY) ? deltaX : deltaY;
 
-            this.Width = ClampClockSize(_resizeStartWidth + deltaX, true);
-            this.Height = ClampClockSize(_resizeStartHeight + deltaY, false);
+            double newWidth = ClampClockSize(_resizeStartWidth + delta, true);
+            double newHeight = ClampClockSize(newWidth / _aspectRatio, false);
+
+            if (Math.Abs(newHeight - (newWidth / _aspectRatio)) > 0.5)
+            {
+                newHeight = ClampClockSize(_resizeStartHeight + delta, false);
+                newWidth = ClampClockSize(newHeight * _aspectRatio, true);
+            }
+
+            this.Width = newWidth;
+            this.Height = newHeight;
+            UpdateDesignSize(newWidth, newHeight);
         }
 
         private void ResizeHandle_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -405,6 +418,10 @@ namespace WidgUI
         {
             this.Width = ClampClockSize(width, true);
             this.Height = ClampClockSize(height, false);
+            if (this.Height > 0)
+            {
+                _aspectRatio = this.Width / this.Height;
+            }
             UpdateDesignSize(this.Width, this.Height);
         }
 

@@ -41,6 +41,13 @@ namespace WidgUI
         // Collapsed size constants
         private const double COLLAPSED_WIDTH = 140;
         private const double COLLAPSED_HEIGHT = 140;
+        private const int AppsPerPage = 9;
+        private const int ExpandedGridColumns = 3;
+        private const int ExpandedGridRows = 3;
+        
+        private Grid _pagerPanel;
+        private TextBlock _pageIndicator;
+        private int _currentPage;
         
         private class ShortcutData 
         {
@@ -191,6 +198,8 @@ namespace WidgUI
             };
 
             _mainGrid = new Grid();
+            _mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            _mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             _iconsGrid = new UniformGrid
             {
@@ -198,7 +207,12 @@ namespace WidgUI
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
+            Grid.SetRow(_iconsGrid, 0);
             _mainGrid.Children.Add(_iconsGrid);
+
+            _pagerPanel = CreatePagerPanel();
+            Grid.SetRow(_pagerPanel, 1);
+            _mainGrid.Children.Add(_pagerPanel);
 
             _dropOverlay = new Border
             {
@@ -220,6 +234,104 @@ namespace WidgUI
 
             _cardBorder.Child = _mainGrid;
             this.Content = _cardBorder;
+        }
+
+        private Grid CreatePagerPanel()
+        {
+            Grid pager = new Grid
+            {
+                Margin = new Thickness(0, 6, 0, 0),
+                Visibility = Visibility.Collapsed
+            };
+            pager.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            pager.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            pager.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            Border prevButton = CreatePagerButton("\uE76B", () => GoToPage(_currentPage - 1));
+            _pageIndicator = new TextBlock
+            {
+                Text = "1 / 1",
+                Foreground = new SolidColorBrush(Color.FromRgb(70, 80, 95)),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Border nextButton = CreatePagerButton("\uE76C", () => GoToPage(_currentPage + 1));
+
+            Grid.SetColumn(prevButton, 0);
+            Grid.SetColumn(_pageIndicator, 1);
+            Grid.SetColumn(nextButton, 2);
+            pager.Children.Add(prevButton);
+            pager.Children.Add(_pageIndicator);
+            pager.Children.Add(nextButton);
+            return pager;
+        }
+
+        private static Border CreatePagerButton(string glyph, Action action)
+        {
+            Border button = new Border
+            {
+                Width = 24,
+                Height = 24,
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
+                Cursor = Cursors.Hand,
+                Margin = new Thickness(4, 0, 4, 0)
+            };
+            button.Child = new TextBlock
+            {
+                Text = glyph,
+                FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(60, 70, 85)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            button.MouseLeftButtonDown += (s, e) =>
+            {
+                e.Handled = true;
+                if (action != null)
+                {
+                    action();
+                }
+            };
+            return button;
+        }
+
+        private int GetTotalPages()
+        {
+            if (_shortcuts.Count == 0)
+            {
+                return 1;
+            }
+
+            return (int)Math.Ceiling(_shortcuts.Count / (double)AppsPerPage);
+        }
+
+        private void GoToPage(int page)
+        {
+            int totalPages = GetTotalPages();
+            _currentPage = Math.Max(0, Math.Min(totalPages - 1, page));
+            RenderShortcuts();
+            UpdatePager();
+        }
+
+        private void UpdatePager()
+        {
+            if (_pagerPanel == null || _pageIndicator == null)
+            {
+                return;
+            }
+
+            int totalPages = GetTotalPages();
+            bool showPager = _isExpanded && totalPages > 1;
+            _pagerPanel.Visibility = showPager ? Visibility.Visible : Visibility.Collapsed;
+
+            if (showPager)
+            {
+                _pageIndicator.Text = string.Format("{0} / {1}", _currentPage + 1, totalPages);
+            }
         }
 
         private void AddShortcutData(string filePath)
@@ -340,6 +452,8 @@ namespace WidgUI
             
             if (expand)
             {
+                _currentPage = 0;
+
                 // Clear any existing animations so we can read real values
                 this.BeginAnimation(Window.LeftProperty, null);
                 this.BeginAnimation(Window.TopProperty, null);
@@ -350,21 +464,21 @@ namespace WidgUI
                 _originalLeft = this.Left;
                 _originalTop = this.Top;
                 
-                // Calculate expanded size
-                int itemCount = _shortcuts.Count;
-                int cols = Math.Min(4, Math.Max(2, (int)Math.Ceiling(Math.Sqrt(itemCount))));
-                int rows = (int)Math.Ceiling(itemCount / (double)cols);
-                
+                // Fixed 3x3 grid with up to 9 apps per page
+                int cols = ExpandedGridColumns;
+                int rows = ExpandedGridRows;
+
                 double expandedItemSize = 60;
                 double expandedItemMargin = 6;
                 double totalItemCell = expandedItemSize + (expandedItemMargin * 2);
-                
+
                 double contentWidth = cols * totalItemCell;
                 double contentHeight = rows * totalItemCell;
-                
+
                 double padTotal = 24 + 16;
+                double pagerHeight = GetTotalPages() > 1 ? 28 : 0;
                 double targetWidth = Math.Max(COLLAPSED_WIDTH * 2, contentWidth + padTotal);
-                double targetHeight = Math.Max(COLLAPSED_HEIGHT * 2, contentHeight + padTotal + 10);
+                double targetHeight = Math.Max(COLLAPSED_HEIGHT * 2, contentHeight + padTotal + pagerHeight + 10);
                 
                 // Keep it square-ish
                 double maxDim = Math.Max(targetWidth, targetHeight);
@@ -383,9 +497,11 @@ namespace WidgUI
                 
                 // Update columns for expanded view  
                 _iconsGrid.Columns = cols;
+                _iconsGrid.Rows = rows;
                 
                 // Render shortcuts but start them invisible for staggered entrance
                 RenderShortcuts();
+                UpdatePager();
                 PrepareIconsForStaggeredEntrance();
                 
                 // Show overlay behind folder
@@ -503,8 +619,11 @@ namespace WidgUI
                     
                     // Switch back to collapsed layout
                     _iconsGrid.Columns = 2;
+                    _iconsGrid.Rows = 0;
+                    _currentPage = 0;
                     _isExpanded = false;
                     RenderShortcuts();
+                    UpdatePager();
                     
                     _isAnimating = false;
                     this.Topmost = false;
@@ -680,7 +799,13 @@ namespace WidgUI
             
             if (_isExpanded)
             {
-                for (int i = 0; i < count; i++)
+                _iconsGrid.Columns = ExpandedGridColumns;
+                _iconsGrid.Rows = ExpandedGridRows;
+
+                int startIndex = _currentPage * AppsPerPage;
+                int endIndex = Math.Min(count, startIndex + AppsPerPage);
+
+                for (int i = startIndex; i < endIndex; i++)
                 {
                     _iconsGrid.Children.Add(CreateAppShortcut(
                         _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,

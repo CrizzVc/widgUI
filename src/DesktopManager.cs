@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -43,6 +44,37 @@ namespace WidgUI
 
             // Send to bottom Z-order (Desktop level)
             SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
+
+        /// <summary>
+        /// Stacks windows bottom-to-top while keeping them on the desktop layer.
+        /// The last window in the list receives the highest z-order.
+        /// </summary>
+        public static void StackWindows(IReadOnlyList<Window> windowsBottomToTop)
+        {
+            if (windowsBottomToTop == null || windowsBottomToTop.Count == 0)
+            {
+                return;
+            }
+
+            IntPtr insertAfter = HWND_BOTTOM;
+
+            foreach (Window window in windowsBottomToTop)
+            {
+                if (window == null)
+                {
+                    continue;
+                }
+
+                IntPtr hwnd = new WindowInteropHelper(window).Handle;
+                if (hwnd == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                insertAfter = hwnd;
+            }
         }
     }
 }

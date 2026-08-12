@@ -18,22 +18,21 @@ namespace WidgUI
     {
         private const double MinSize = 80;
         private const double MaxSize = 800;
-        private const double CardPadding = 8;
         private const double DefaultMaxDimension = 280;
-        private const double ImageCornerRadius = 14;
+        private const double ImageCornerRadius = 20;
         private const int IdleHideDelayMs = 2500;
         private const int ChromeFadeMs = 350;
 
         private bool _isLocked;
         private bool _embeddedInDesktop = true;
         private bool _isResizing;
-        private bool _isChromeVisible = true;
+        private bool _isChromeVisible = false;
         private Point _resizeStartPoint;
         private double _resizeStartWidth;
         private double _resizeStartHeight;
+        private double _aspectRatio = 1;
 
         private Border _cardBorder;
-        private Border _chromeLayer;
         private Border _imageBorder;
         private System.Windows.Controls.Image _imageControl;
         private Border _resizeHandle;
@@ -201,37 +200,29 @@ namespace WidgUI
 
             Grid mainGrid = new Grid();
 
-            _chromeLayer = new Border
-            {
-                Background = new SolidColorBrush(Color.FromArgb(160, 20, 20, 30)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(100, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(ImageCornerRadius + 2),
-                Effect = new DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    Direction = 270,
-                    ShadowDepth = 4,
-                    Opacity = 0.25,
-                    BlurRadius = 12
-                }
-            };
-
             _imageBorder = new Border
             {
                 CornerRadius = new CornerRadius(ImageCornerRadius),
                 ClipToBounds = true,
-                Margin = new Thickness(CardPadding),
-                Background = Brushes.Transparent
+                Background = Brushes.Transparent,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    Direction = 270,
+                    ShadowDepth = 3,
+                    Opacity = 0.22,
+                    BlurRadius = 18
+                }
             };
 
             _imageControl = new System.Windows.Controls.Image
             {
-                Stretch = Stretch.Uniform,
+                Stretch = Stretch.UniformToFill,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch
             };
             RenderOptions.SetBitmapScalingMode(_imageControl, BitmapScalingMode.HighQuality);
+            ApplyRoundedClip(_imageControl, ImageCornerRadius);
             _imageBorder.Child = _imageControl;
 
             _resizeHandle = new Border
@@ -240,10 +231,11 @@ namespace WidgUI
                 Height = 22,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Bottom,
-                Background = new SolidColorBrush(Color.FromArgb(140, 255, 255, 255)),
-                CornerRadius = new CornerRadius(6, 0, ImageCornerRadius, 0),
+                Background = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)),
+                CornerRadius = new CornerRadius(10, 0, ImageCornerRadius, 0),
                 Cursor = Cursors.SizeNWSE,
-                ToolTip = "Arrastra para cambiar tamano"
+                ToolTip = "Arrastra para cambiar tamano",
+                Opacity = 1
             };
 
             TextBlock resizeGlyph = new TextBlock
@@ -272,11 +264,28 @@ namespace WidgUI
             _resizeHandle.MouseMove += ResizeHandle_MouseMove;
             _resizeHandle.MouseLeftButtonUp += ResizeHandle_MouseLeftButtonUp;
 
-            mainGrid.Children.Add(_chromeLayer);
             mainGrid.Children.Add(_imageBorder);
             mainGrid.Children.Add(_resizeHandle);
+            _resizeHandle.Visibility = Visibility.Collapsed;
+            _resizeHandle.Opacity = 0;
             _cardBorder.Child = mainGrid;
             this.Content = _cardBorder;
+        }
+
+        private static void ApplyRoundedClip(FrameworkElement element, double radius)
+        {
+            RectangleGeometry clip = new RectangleGeometry { RadiusX = radius, RadiusY = radius };
+            element.Clip = clip;
+
+            element.SizeChanged += (s, e) =>
+            {
+                clip.Rect = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
+            };
+
+            if (element.ActualWidth > 0 && element.ActualHeight > 0)
+            {
+                clip.Rect = new Rect(0, 0, element.ActualWidth, element.ActualHeight);
+            }
         }
 
         private void ShowChrome()
@@ -289,7 +298,7 @@ namespace WidgUI
             }
 
             _isChromeVisible = true;
-            AnimateChrome(1, CardPadding);
+            AnimateResizeHandle(1);
             if (!_isLocked)
             {
                 _resizeHandle.Visibility = Visibility.Visible;
@@ -304,26 +313,12 @@ namespace WidgUI
             }
 
             _isChromeVisible = false;
-            AnimateChrome(0, 0);
+            AnimateResizeHandle(0);
             _resizeHandle.Visibility = Visibility.Collapsed;
         }
 
-        private void AnimateChrome(double targetOpacity, double targetMargin)
+        private void AnimateResizeHandle(double targetOpacity)
         {
-            DoubleAnimation opacityAnim = new DoubleAnimation(targetOpacity, TimeSpan.FromMilliseconds(ChromeFadeMs))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            _chromeLayer.BeginAnimation(UIElement.OpacityProperty, opacityAnim);
-
-            ThicknessAnimation marginAnim = new ThicknessAnimation(
-                new Thickness(targetMargin),
-                TimeSpan.FromMilliseconds(ChromeFadeMs))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            _imageBorder.BeginAnimation(Border.MarginProperty, marginAnim);
-
             DoubleAnimation handleAnim = new DoubleAnimation(
                 (!_isLocked && targetOpacity > 0) ? 1 : 0,
                 TimeSpan.FromMilliseconds(ChromeFadeMs))
@@ -356,6 +351,7 @@ namespace WidgUI
             _resizeStartPoint = e.GetPosition(this);
             _resizeStartWidth = this.Width;
             _resizeStartHeight = this.Height;
+            _aspectRatio = _resizeStartWidth / _resizeStartHeight;
             _resizeHandle.CaptureMouse();
             e.Handled = true;
         }
@@ -370,24 +366,15 @@ namespace WidgUI
             Point current = e.GetPosition(this);
             double deltaX = current.X - _resizeStartPoint.X;
             double deltaY = current.Y - _resizeStartPoint.Y;
+            double delta = Math.Abs(deltaX) >= Math.Abs(deltaY) ? deltaX : deltaY;
 
-            double newWidth = ClampSize(_resizeStartWidth + deltaX);
-            double newHeight = ClampSize(_resizeStartHeight + deltaY);
+            double newWidth = ClampSize(_resizeStartWidth + delta);
+            double newHeight = ClampSize(newWidth / _aspectRatio);
 
-            if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift))
+            if (Math.Abs(newHeight - (newWidth / _aspectRatio)) > 0.5)
             {
-                double aspect = _resizeStartWidth / _resizeStartHeight;
-                if (Math.Abs(deltaX) >= Math.Abs(deltaY))
-                {
-                    newHeight = newWidth / aspect;
-                }
-                else
-                {
-                    newWidth = newHeight * aspect;
-                }
-
-                newWidth = ClampSize(newWidth);
-                newHeight = ClampSize(newHeight);
+                newHeight = ClampSize(_resizeStartHeight + delta);
+                newWidth = ClampSize(newHeight * _aspectRatio);
             }
 
             this.Width = newWidth;
@@ -435,8 +422,7 @@ namespace WidgUI
                 return;
             }
 
-            double contentMax = DefaultMaxDimension - (CardPadding * 2) - 2;
-            double scale = Math.Min(contentMax / pixelWidth, contentMax / pixelHeight);
+            double scale = Math.Min(DefaultMaxDimension / pixelWidth, DefaultMaxDimension / pixelHeight);
             if (scale > 1)
             {
                 scale = 1;
@@ -444,8 +430,9 @@ namespace WidgUI
 
             double contentWidth = pixelWidth * scale;
             double contentHeight = pixelHeight * scale;
-            this.Width = Math.Max(MinSize, contentWidth + (CardPadding * 2) + 2);
-            this.Height = Math.Max(MinSize, contentHeight + (CardPadding * 2) + 2);
+            this.Width = Math.Max(MinSize, contentWidth);
+            this.Height = Math.Max(MinSize, contentHeight);
+            _aspectRatio = this.Width / this.Height;
         }
 
         private void ChangeImage()
@@ -526,23 +513,26 @@ namespace WidgUI
 
             BitmapSource source = (BitmapSource)_imageControl.Source;
             double aspect = (double)source.PixelWidth / source.PixelHeight;
-            double contentSize = targetSize - (CardPadding * 2) - 2;
 
             double contentWidth;
             double contentHeight;
             if (aspect >= 1)
             {
-                contentWidth = contentSize;
-                contentHeight = contentSize / aspect;
+                contentWidth = targetSize;
+                contentHeight = targetSize / aspect;
             }
             else
             {
-                contentHeight = contentSize;
-                contentWidth = contentSize * aspect;
+                contentHeight = targetSize;
+                contentWidth = targetSize * aspect;
             }
 
-            this.Width = ClampSize(contentWidth + (CardPadding * 2) + 2);
-            this.Height = ClampSize(contentHeight + (CardPadding * 2) + 2);
+            this.Width = ClampSize(contentWidth);
+            this.Height = ClampSize(contentHeight);
+            if (this.Height > 0)
+            {
+                _aspectRatio = this.Width / this.Height;
+            }
         }
 
         public ImageWidgetLayoutData ToLayoutData()
