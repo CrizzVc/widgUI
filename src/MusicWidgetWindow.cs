@@ -80,6 +80,7 @@ namespace WidgUI
         private DispatcherTimer _equalizerTimer;
         private readonly Random _random = new Random();
         private string _widgetId;
+        private static readonly Color SpotifyDefaultAccent = Color.FromRgb(209, 51, 62);
 
         public MusicWidgetWindow()
             : this(null)
@@ -280,8 +281,8 @@ namespace WidgUI
                     _maxHeight = 150;
                     break;
                 case MusicWidgetVariant.SpotifyTile:
-                    _minWidth = 160;
-                    _minHeight = 160;
+                    _minWidth = 140;
+                    _minHeight = 140;
                     _maxWidth = 320;
                     _maxHeight = 320;
                     break;
@@ -331,8 +332,16 @@ namespace WidgUI
         {
             if (_designHost != null)
             {
-                _designHost.Width = width;
-                _designHost.Height = height;
+                if (_currentVariant == MusicWidgetVariant.SpotifyTile)
+                {
+                    _designHost.Width = _designWidth;
+                    _designHost.Height = _designHeight;
+                }
+                else
+                {
+                    _designHost.Width = width;
+                    _designHost.Height = height;
+                }
             }
         }
 
@@ -1274,10 +1283,9 @@ namespace WidgUI
             _materialWavePath = null;
 
             const double tileRadius = 32;
-            Color spotifyRed = Color.FromRgb(209, 51, 62);
 
             _cardBorder = CreateCardShell(tileRadius, new Thickness(14), new Thickness(0));
-            _cardBorder.Background = new SolidColorBrush(spotifyRed);
+            _cardBorder.Background = new SolidColorBrush(SpotifyDefaultAccent);
 
             Grid content = new Grid();
             content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -1328,7 +1336,7 @@ namespace WidgUI
             Grid.SetColumn(textPanel, 0);
             content.Children.Add(textPanel);
 
-            _playPauseButton = CreateSpotifyPlayButton(54, spotifyRed);
+            _playPauseButton = CreateSpotifyPlayButton(54, SpotifyDefaultAccent);
             _playPauseButton.HorizontalAlignment = HorizontalAlignment.Right;
             _playPauseButton.VerticalAlignment = VerticalAlignment.Bottom;
             Grid.SetRow(_playPauseButton, 1);
@@ -2140,6 +2148,11 @@ namespace WidgUI
                 {
                     _placeholderIcon.Visibility = Visibility.Collapsed;
                 }
+
+                if (_currentVariant == MusicWidgetVariant.SpotifyTile)
+                {
+                    ApplySpotifyAccentFromAlbumArt(state.AlbumArt);
+                }
             }
             else if (!state.HasSession)
             {
@@ -2171,6 +2184,35 @@ namespace WidgUI
                 if (_placeholderIcon != null)
                 {
                     _placeholderIcon.Visibility = Visibility.Visible;
+                }
+
+                if (_currentVariant == MusicWidgetVariant.SpotifyTile)
+                {
+                    ApplySpotifyAccentColor(SpotifyDefaultAccent);
+                }
+            }
+        }
+
+        private void ApplySpotifyAccentFromAlbumArt(BitmapSource albumArt)
+        {
+            Color averageColor = WidgetAppearanceHelper.SampleBitmapAverageColor(albumArt);
+            Color accentColor = WidgetAppearanceHelper.CreateAlbumAccentColor(averageColor, SpotifyDefaultAccent);
+            ApplySpotifyAccentColor(accentColor);
+        }
+
+        private void ApplySpotifyAccentColor(Color accentColor)
+        {
+            if (_cardBorder != null)
+            {
+                _cardBorder.Background = new SolidColorBrush(accentColor);
+            }
+
+            if (_playPauseButton != null)
+            {
+                Path pathIcon = _playPauseButton.Tag as Path;
+                if (pathIcon != null)
+                {
+                    pathIcon.Fill = new SolidColorBrush(accentColor);
                 }
             }
         }

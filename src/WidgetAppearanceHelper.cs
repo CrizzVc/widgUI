@@ -327,5 +327,113 @@ namespace WidgUI
             if (value > max) return max;
             return value;
         }
+
+        public static MediaColor SampleBitmapAverageColor(BitmapSource source)
+        {
+            if (source == null)
+            {
+                return MediaColor.FromRgb(120, 120, 130);
+            }
+
+            try
+            {
+                BitmapSource sample = source;
+                if (source.PixelWidth > 64 || source.PixelHeight > 64)
+                {
+                    double scale = 64.0 / Math.Max(source.PixelWidth, source.PixelHeight);
+                    TransformedBitmap scaled = new TransformedBitmap(
+                        source,
+                        new ScaleTransform(scale, scale));
+                    scaled.Freeze();
+                    sample = scaled;
+                }
+
+                int width = sample.PixelWidth;
+                int height = sample.PixelHeight;
+                if (width <= 0 || height <= 0)
+                {
+                    return MediaColor.FromRgb(120, 120, 130);
+                }
+
+                int stride = width * 4;
+                byte[] pixels = new byte[stride * height];
+                sample.CopyPixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
+
+                long totalR = 0;
+                long totalG = 0;
+                long totalB = 0;
+                long count = 0;
+                int stepX = Math.Max(1, width / 12);
+                int stepY = Math.Max(1, height / 12);
+
+                for (int y = 0; y < height; y += stepY)
+                {
+                    for (int x = 0; x < width; x += stepX)
+                    {
+                        int index = y * stride + x * 4;
+                        totalB += pixels[index];
+                        totalG += pixels[index + 1];
+                        totalR += pixels[index + 2];
+                        count++;
+                    }
+                }
+
+                if (count == 0)
+                {
+                    return MediaColor.FromRgb(120, 120, 130);
+                }
+
+                return MediaColor.FromRgb(
+                    (byte)(totalR / count),
+                    (byte)(totalG / count),
+                    (byte)(totalB / count));
+            }
+            catch
+            {
+                return MediaColor.FromRgb(120, 120, 130);
+            }
+        }
+
+        public static MediaColor CreateAlbumAccentColor(MediaColor averageColor, MediaColor fallback)
+        {
+            double r = averageColor.R / 255.0;
+            double g = averageColor.G / 255.0;
+            double b = averageColor.B / 255.0;
+            double mean = (r + g + b) / 3.0;
+            double spread = Math.Max(Math.Abs(r - mean), Math.Max(Math.Abs(g - mean), Math.Abs(b - mean)));
+
+            if (spread < 0.035)
+            {
+                return fallback;
+            }
+
+            const double saturationBoost = 1.55;
+            r = mean + (r - mean) * saturationBoost;
+            g = mean + (g - mean) * saturationBoost;
+            b = mean + (b - mean) * saturationBoost;
+
+            double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            const double targetLuminance = 0.38;
+            if (luminance > 0.001)
+            {
+                double scale = targetLuminance / luminance;
+                scale = Math.Max(0.55, Math.Min(1.45, scale));
+                r *= scale;
+                g *= scale;
+                b *= scale;
+            }
+
+            return MediaColor.FromRgb(
+                (byte)Math.Round(ClampByte(r * 255.0)),
+                (byte)Math.Round(ClampByte(g * 255.0)),
+                (byte)Math.Round(ClampByte(b * 255.0)));
+        }
+
+        private static double ClampByte(double value)
+        {
+            if (value < 0) return 0;
+            if (value > 255) return 255;
+            return value;
+        }
     }
 }
