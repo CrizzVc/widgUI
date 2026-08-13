@@ -24,6 +24,7 @@ namespace WidgUI
         public const int WS_EX_NOACTIVATE = 0x08000000;
 
         public static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
+        public static readonly IntPtr HWND_TOP = new IntPtr(0);
         public const uint SWP_NOMOVE = 0x0002;
         public const uint SWP_NOSIZE = 0x0001;
         public const uint SWP_NOACTIVATE = 0x0010;
@@ -75,6 +76,22 @@ namespace WidgUI
                 SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
                 insertAfter = hwnd;
             }
+        }
+
+        public static void BringWindowToTop(Window window)
+        {
+            if (window == null)
+            {
+                return;
+            }
+
+            IntPtr hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd == IntPtr.Zero)
+            {
+                return;
+            }
+
+            SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
         }
     }
 }

@@ -14,7 +14,7 @@ using Brushes = System.Windows.Media.Brushes;
 
 namespace WidgUI
 {
-    public class ImageWidgetWindow : Window
+    public class ImageWidgetWindow : Window, ILayeredDesktopWidget
     {
         private const double MinSize = 80;
         private const double MaxSize = 800;
@@ -39,6 +39,13 @@ namespace WidgUI
         private DispatcherTimer _idleTimer;
         private string _imagePath;
         private string _widgetId;
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
 
         public ImageWidgetWindow(string imagePath)
             : this(CreateLayoutFromPath(imagePath))
@@ -594,7 +601,7 @@ namespace WidgUI
             cm.Items.Add(itemChange);
             cm.Items.Add(itemLock);
             cm.Items.Add(itemSize);
-            cm.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(cm, this);
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
@@ -654,7 +661,8 @@ namespace WidgUI
                 Left = this.Left,
                 Top = this.Top,
                 Width = this.Width,
-                Height = this.Height
+                Height = this.Height,
+                ZIndex = _layerIndex
             };
         }
 
@@ -680,6 +688,7 @@ namespace WidgUI
             }
 
             _isLocked = data.IsLocked;
+            _layerIndex = data.ZIndex >= 0 ? data.ZIndex : WidgetRegistry.AllocateLayerIndex();
             _resizeHandle.Visibility = _isLocked ? Visibility.Collapsed : Visibility.Visible;
         }
     }

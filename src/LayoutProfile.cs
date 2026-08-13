@@ -95,6 +95,9 @@ namespace WidgUI
 
         [DataMember(Name = "adaptToBackground")]
         public bool AdaptToBackground { get; set; }
+
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
     }
 
     [DataContract]
@@ -137,6 +140,9 @@ namespace WidgUI
         [DataMember(Name = "cornerRadius")]
         public double CornerRadius { get; set; }
 
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
+
         public FolderWidgetLayoutData()
         {
             Shortcuts = new List<string>();
@@ -168,6 +174,14 @@ namespace WidgUI
 
         [DataMember(Name = "height")]
         public double Height { get; set; }
+
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
+
+        public ImageWidgetLayoutData()
+        {
+            ZIndex = -1;
+        }
     }
 
     [DataContract]
@@ -193,6 +207,9 @@ namespace WidgUI
 
         [DataMember(Name = "height")]
         public double Height { get; set; }
+
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
     }
 
     [DataContract]
@@ -224,6 +241,9 @@ namespace WidgUI
 
         [DataMember(Name = "opacity")]
         public double Opacity { get; set; }
+
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
 
         public DockWidgetLayoutData()
         {
@@ -275,6 +295,9 @@ namespace WidgUI
         [DataMember(Name = "adaptToBackground")]
         public bool AdaptToBackground { get; set; }
 
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
+
         public CustomClockWidgetLayoutData()
         {
             FontFamily = "Segoe UI";
@@ -317,6 +340,10 @@ namespace WidgUI
 
         [DataMember(Name = "showWhiteBackground")]
         public bool? ShowWhiteBackground { get; set; }
+
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
+
         public AppWidgetLayoutData()
         {
             Opacity = WidgetAppearanceHelper.DefaultOpacity;
@@ -349,6 +376,9 @@ namespace WidgUI
 
         [DataMember(Name = "opacity")]
         public double Opacity { get; set; }
+
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
 
         public ExpandedFolderWidgetLayoutData()
         {
@@ -383,6 +413,9 @@ namespace WidgUI
 
         [DataMember(Name = "styleVariant")]
         public int StyleVariant { get; set; }
+
+        [DataMember(Name = "zIndex")]
+        public int ZIndex { get; set; }
 
         public CalendarWidgetLayoutData()
         {

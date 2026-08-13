@@ -13,7 +13,7 @@ using System.Windows.Shapes;
 
 namespace WidgUI
 {
-    public class ExpandedFolderWidgetWindow : Window
+    public class ExpandedFolderWidgetWindow : Window, ILayeredDesktopWidget
     {
         public const int MaxShortcuts = 8;
         private const int GridColumns = 4;
@@ -46,6 +46,13 @@ namespace WidgUI
         }
 
         private readonly List<ShortcutData> _shortcuts = new List<ShortcutData>();
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
 
         public ExpandedFolderWidgetWindow() : this(null)
         {
@@ -69,6 +76,7 @@ namespace WidgUI
             else
             {
                 ApplyAppearance();
+                _layerIndex = WidgetRegistry.AllocateLayerIndex();
             }
         }
 
@@ -481,7 +489,7 @@ namespace WidgUI
             itemExit.Click += (s, e) => this.Close();
 
             cm.Items.Add(itemLock);
-            cm.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(cm, this);
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
@@ -502,7 +510,8 @@ namespace WidgUI
                 Top = this.Top,
                 ThemeMode = (int)_themeMode,
                 AdaptToBackground = _adaptToBackground,
-                Opacity = _opacity
+                Opacity = _opacity,
+                ZIndex = _layerIndex
             };
 
             foreach (ShortcutData shortcut in _shortcuts)
@@ -542,6 +551,8 @@ namespace WidgUI
             {
                 _opacity = data.Opacity;
             }
+
+            _layerIndex = data.ZIndex;
 
             _shortcuts.Clear();
             if (data.Shortcuts != null)

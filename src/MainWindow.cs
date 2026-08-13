@@ -19,7 +19,7 @@ namespace WidgUI
         StackedMono
     }
 
-    public class MainWindow : Window
+    public class MainWindow : Window, ILayeredDesktopWidget
     {
         private TextBlock _hoursText;
         private TextBlock _minutesText;
@@ -38,6 +38,13 @@ namespace WidgUI
         private bool _showDate = false;
         private bool _isLocked = false;
         private bool _embeddedInDesktop = true;
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
 
         private WidgetStyleVariant _currentVariant = WidgetStyleVariant.MinimalistVertical;
 
@@ -839,7 +846,7 @@ namespace WidgUI
             cm.Items.Add(itemDate);
             cm.Items.Add(itemAdapt);
             cm.Items.Add(itemLock);
-            cm.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(cm, this);
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
@@ -881,7 +888,8 @@ namespace WidgUI
                 Top = this.Top,
                 Width = this.Width,
                 Height = this.Height,
-                AdaptToBackground = _adaptToBackground
+                AdaptToBackground = _adaptToBackground,
+                ZIndex = _layerIndex
             };
         }
 
@@ -910,6 +918,7 @@ namespace WidgUI
             }
 
             _adaptToBackground = data.AdaptToBackground;
+            _layerIndex = data.ZIndex;
             if (_adaptToBackground)
             {
                 ApplyAdaptiveColors();

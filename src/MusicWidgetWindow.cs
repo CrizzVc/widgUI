@@ -24,7 +24,7 @@ namespace WidgUI
         SpotifyTile
     }
 
-    public class MusicWidgetWindow : Window
+    public class MusicWidgetWindow : Window, ILayeredDesktopWidget
     {
         private enum TransportIconKind
         {
@@ -81,6 +81,13 @@ namespace WidgUI
         private readonly Random _random = new Random();
         private string _widgetId;
         private static readonly Color SpotifyDefaultAccent = Color.FromRgb(209, 51, 62);
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
 
         public MusicWidgetWindow()
             : this(null)
@@ -100,6 +107,10 @@ namespace WidgUI
             if (layoutData != null)
             {
                 ApplyLayoutData(layoutData);
+            }
+            else
+            {
+                _layerIndex = WidgetRegistry.AllocateLayerIndex();
             }
         }
 
@@ -2405,7 +2416,7 @@ namespace WidgUI
 
             cm.Items.Add(itemVariants);
             cm.Items.Add(itemLock);
-            cm.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(cm, this);
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
@@ -2433,7 +2444,8 @@ namespace WidgUI
                 Top = this.Top,
                 StyleVariant = (int)_currentVariant,
                 Width = this.Width,
-                Height = this.Height
+                Height = this.Height,
+                ZIndex = _layerIndex
             };
         }
 
@@ -2457,6 +2469,7 @@ namespace WidgUI
             this.Left = data.Left;
             this.Top = data.Top;
             _isLocked = data.IsLocked;
+            _layerIndex = data.ZIndex;
 
             if (data.Width >= _minWidth && data.Height >= _minHeight)
             {

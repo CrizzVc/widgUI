@@ -12,7 +12,7 @@ using Microsoft.Win32;
 
 namespace WidgUI
 {
-    public class AppWidgetWindow : Window
+    public class AppWidgetWindow : Window, ILayeredDesktopWidget
     {
         private const double ItemSize = 46;
         private const double IconSize = 46;
@@ -26,6 +26,13 @@ namespace WidgUI
         private string _widgetId;
         private string _appPath;
         private Point _mouseDownPoint;
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
 
         private Border _iconTile;
         private Grid _iconGrid;
@@ -51,6 +58,7 @@ namespace WidgUI
             else
             {
                 ApplyTileBackground();
+                _layerIndex = WidgetRegistry.AllocateLayerIndex();
             }
 
             this.Loaded += AppWidgetWindow_Loaded;
@@ -110,6 +118,7 @@ namespace WidgUI
             _mouseDownPoint = e.GetPosition(this);
             _dragStarted = false;
             _iconTile.CaptureMouse();
+            WidgetLayerHelper.BeginHoldPreview(this);
             e.Handled = true;
         }
 
@@ -139,6 +148,8 @@ namespace WidgUI
 
             if (!_dragStarted)
             {
+                WidgetLayerHelper.EndHoldPreview(this);
+
                 if (string.IsNullOrEmpty(_appPath))
                 {
                     PickApp();
@@ -402,7 +413,7 @@ namespace WidgUI
             };
             menu.Items.Add(lockPos);
 
-            menu.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(menu, this);
 
             MenuItem closeItem = new MenuItem { Header = "Cerrar widget" };
             closeItem.Click += (s, e) => this.Close();
@@ -425,7 +436,8 @@ namespace WidgUI
                 IsLocked = _isLocked,
                 Left = this.Left,
                 Top = this.Top,
-                ShowWhiteBackground = _showWhiteBackground
+                ShowWhiteBackground = _showWhiteBackground,
+                ZIndex = _layerIndex
             };
         }
 
@@ -439,6 +451,7 @@ namespace WidgUI
             _showWhiteBackground = data.ShowWhiteBackground ?? true;
             this.Left = data.Left;
             this.Top = data.Top;
+            _layerIndex = data.ZIndex;
 
             if (!string.IsNullOrEmpty(data.Path) && (File.Exists(data.Path) || data.Path == "explorer.exe"))
             {

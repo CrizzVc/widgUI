@@ -15,12 +15,19 @@ using WpfCursors = System.Windows.Input.Cursors;
 
 namespace WidgUI
 {
-    public class CustomClockWidgetWindow : Window
+    public class CustomClockWidgetWindow : Window, ILayeredDesktopWidget
     {
         private bool _isLocked = false;
         private bool _embeddedInDesktop = true;
         private bool _adaptToBackground = false;
         private string _widgetId;
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
 
         private string _fontFamily = "Segoe UI";
         private double _fontSize = 48.0;
@@ -74,6 +81,7 @@ namespace WidgUI
             {
                 UpdateDesignDimensions();
                 ApplyWindowSize(_designWidth, _designHeight);
+                _layerIndex = WidgetRegistry.AllocateLayerIndex();
             }
 
             SetupTimer();
@@ -438,7 +446,7 @@ namespace WidgUI
             };
             menu.Items.Add(lockPos);
 
-            menu.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(menu, this);
 
             MenuItem closeItem = new MenuItem { Header = "Cerrar widget" };
             closeItem.Click += (s, e) => this.Close();
@@ -505,7 +513,8 @@ namespace WidgUI
                 ShowAmPm = _showAmPm,
                 Width = this.Width,
                 Height = this.Height,
-                AdaptToBackground = _adaptToBackground
+                AdaptToBackground = _adaptToBackground,
+                ZIndex = _layerIndex
             };
         }
 
@@ -525,6 +534,7 @@ namespace WidgUI
             _isVertical = data.IsVertical;
             _showAmPm = data.ShowAmPm;
             _adaptToBackground = data.AdaptToBackground;
+            _layerIndex = data.ZIndex;
 
             UpdateLayoutMode();
 

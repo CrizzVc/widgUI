@@ -19,7 +19,7 @@ using Color = System.Windows.Media.Color;
 
 namespace WidgUI
 {
-    public class FolderWidgetWindow : Window
+    public class FolderWidgetWindow : Window, ILayeredDesktopWidget
     {
         private bool _isLocked = false;
         private bool _embeddedInDesktop = true;
@@ -63,6 +63,18 @@ namespace WidgUI
         private double _cornerRadius = 30;
         private WidgetAppearanceColors _appearanceColors;
         private TextBlock _dropText;
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
+
+        public Window OverlayWindow
+        {
+            get { return _overlayWindow; }
+        }
 
         public FolderWidgetWindow()
             : this(null)
@@ -80,6 +92,10 @@ namespace WidgUI
             if (layoutData != null)
             {
                 ApplyLayoutData(layoutData);
+            }
+            else
+            {
+                _layerIndex = WidgetRegistry.AllocateLayerIndex();
             }
         }
 
@@ -483,6 +499,8 @@ namespace WidgUI
             };
             
             _overlayWindow.Show();
+            DesktopManager.EmbedInDesktop(_overlayWindow);
+            WidgetRegistry.ApplyLayerStack();
             
             // Animate background color alpha from transparent to dark
             ColorAnimation colorAnim = new ColorAnimation
@@ -517,17 +535,20 @@ namespace WidgUI
                     colorAnim.Completed += (s, e) =>
                     {
                         overlay.Close();
+                        WidgetRegistry.ApplyLayerStack();
                     };
                     frostedBg.Background.BeginAnimation(SolidColorBrush.ColorProperty, colorAnim);
                 }
                 else
                 {
                     overlay.Close();
+                    WidgetRegistry.ApplyLayerStack();
                 }
             }
             else
             {
                 overlay.Close();
+                WidgetRegistry.ApplyLayerStack();
             }
         }
 
@@ -599,7 +620,6 @@ namespace WidgUI
                 PrepareIconsForStaggeredEntrance();
                 
                 // Show overlay behind folder
-                this.Topmost = true;
                 ShowOverlay();
                 
                 DoubleAnimation animW = new DoubleAnimation
@@ -696,7 +716,6 @@ namespace WidgUI
                     UpdatePager();
                     
                     _isAnimating = false;
-                    this.Topmost = false;
                 };
                 
                 HideOverlay();
@@ -1198,7 +1217,7 @@ namespace WidgUI
             };
 
             cm.Items.Add(itemLock);
-            cm.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(cm, this);
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
@@ -1215,7 +1234,8 @@ namespace WidgUI
                 ThemeMode = (int)_themeMode,
                 AdaptToBackground = _adaptToBackground,
                 Opacity = _opacity,
-                CornerRadius = _cornerRadius
+                CornerRadius = _cornerRadius,
+                ZIndex = _layerIndex
             };
 
             foreach (ShortcutData shortcut in _shortcuts)
@@ -1260,6 +1280,8 @@ namespace WidgUI
             {
                 _cornerRadius = data.CornerRadius;
             }
+
+            _layerIndex = data.ZIndex;
 
             _shortcuts.Clear();
             if (data.Shortcuts != null)

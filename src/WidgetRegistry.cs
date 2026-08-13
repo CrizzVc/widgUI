@@ -18,6 +18,7 @@ namespace WidgUI
         private static readonly List<AppWidgetWindow> _appWidgets = new List<AppWidgetWindow>();
         private static readonly List<ExpandedFolderWidgetWindow> _expandedFolderWidgets = new List<ExpandedFolderWidgetWindow>();
         private static readonly List<CalendarWidgetWindow> _calendarWidgets = new List<CalendarWidgetWindow>();
+        private static Window _temporaryLayerBoostWindow;
 
         public static void Initialize(MainWindow clock, EdgeMenuWindow edgeMenu)
         {
@@ -32,29 +33,242 @@ namespace WidgUI
 
         public static void EnsureEdgeMenuOnTop()
         {
-            if (_edgeMenu == null)
+            ApplyLayerStack();
+        }
+
+        public static void ApplyLayerStack()
+        {
+            List<Window> stack = BuildLayerStack(_temporaryLayerBoostWindow);
+
+            if (_edgeMenu != null)
+            {
+                stack.Add(_edgeMenu);
+            }
+
+            DesktopManager.StackWindows(stack);
+
+            if (_edgeMenu != null)
+            {
+                DesktopManager.BringWindowToTop(_edgeMenu);
+            }
+        }
+
+        public static void BeginTemporaryLayerBoost(Window window)
+        {
+            if (window == null || window == _edgeMenu || !IsStackableWidget(window))
             {
                 return;
             }
 
+            if (_temporaryLayerBoostWindow == window || IsTopStackableWidget(window))
+            {
+                return;
+            }
+
+            _temporaryLayerBoostWindow = window;
+            ApplyLayerStack();
+        }
+
+        public static void EndTemporaryLayerBoost(Window window)
+        {
+            if (_temporaryLayerBoostWindow != window)
+            {
+                return;
+            }
+
+            _temporaryLayerBoostWindow = null;
+            ApplyLayerStack();
+        }
+
+        private static bool IsStackableWidget(Window window)
+        {
+            return window is ILayeredDesktopWidget;
+        }
+
+        private static bool IsTopStackableWidget(Window window)
+        {
+            List<Window> sorted = GetStackableWindowsSorted();
+            return sorted.Count > 0 && sorted[sorted.Count - 1] == window;
+        }
+
+        private static List<Window> BuildLayerStack(Window promotedWindow)
+        {
             List<Window> stack = new List<Window>();
+            List<Window> sorted = GetStackableWindowsSorted();
+
+            foreach (Window window in sorted)
+            {
+                if (promotedWindow != null && window == promotedWindow)
+                {
+                    continue;
+                }
+
+                AppendWindowWithOverlay(stack, window);
+            }
+
+            if (promotedWindow != null)
+            {
+                AppendWindowWithOverlay(stack, promotedWindow);
+            }
+
+            return stack;
+        }
+
+        private static void AppendWindowWithOverlay(List<Window> stack, Window window)
+        {
+            FolderWidgetWindow folder = window as FolderWidgetWindow;
+            if (folder != null && folder.OverlayWindow != null)
+            {
+                stack.Add(folder.OverlayWindow);
+            }
+
+            stack.Add(window);
+        }
+
+        public static void RaiseWidgetLayer(Window window)
+        {
+            SwapWidgetLayer(window, 1);
+        }
+
+        public static void LowerWidgetLayer(Window window)
+        {
+            SwapWidgetLayer(window, -1);
+        }
+
+        public static int AllocateLayerIndex()
+        {
+            int maxIndex = -1;
+
+            foreach (ILayeredDesktopWidget widget in EnumerateLayeredWidgets())
+            {
+                if (widget.LayerIndex > maxIndex)
+                {
+                    maxIndex = widget.LayerIndex;
+                }
+            }
+
+            return maxIndex + 1;
+        }
+
+        private static void SwapWidgetLayer(Window window, int direction)
+        {
+            if (!(window is ILayeredDesktopWidget))
+            {
+                return;
+            }
+
+            List<Window> ordered = GetStackableWindowsSorted();
+            int index = ordered.IndexOf(window);
+            if (index < 0)
+            {
+                return;
+            }
+
+            int targetIndex = index + direction;
+            if (targetIndex < 0 || targetIndex >= ordered.Count)
+            {
+                return;
+            }
+
+            Window temp = ordered[index];
+            ordered[index] = ordered[targetIndex];
+            ordered[targetIndex] = temp;
+
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                ((ILayeredDesktopWidget)ordered[i]).LayerIndex = i;
+            }
+
+            ApplyLayerStack();
+            AutoSaveLayout();
+        }
+
+        private static IEnumerable<ILayeredDesktopWidget> EnumerateLayeredWidgets()
+        {
+            if (_clock != null)
+            {
+                yield return _clock;
+            }
+
+            foreach (FolderWidgetWindow widget in _folderWidgets)
+            {
+                yield return widget;
+            }
+
+            foreach (ImageWidgetWindow widget in _imageWidgets)
+            {
+                yield return widget;
+            }
+
+            foreach (MusicWidgetWindow widget in _musicWidgets)
+            {
+                yield return widget;
+            }
+
+            foreach (DockWidgetWindow widget in _dockWidgets)
+            {
+                yield return widget;
+            }
+
+            foreach (CustomClockWidgetWindow widget in _customClockWidgets)
+            {
+                yield return widget;
+            }
+
+            foreach (AppWidgetWindow widget in _appWidgets)
+            {
+                yield return widget;
+            }
+
+            foreach (ExpandedFolderWidgetWindow widget in _expandedFolderWidgets)
+            {
+                yield return widget;
+            }
+
+            foreach (CalendarWidgetWindow widget in _calendarWidgets)
+            {
+                yield return widget;
+            }
+        }
+
+        private static List<Window> GetStackableWindowsSorted()
+        {
+            List<Window> windows = new List<Window>();
 
             if (_clock != null)
             {
-                stack.Add(_clock);
+                windows.Add(_clock);
             }
 
-            stack.AddRange(_folderWidgets);
-            stack.AddRange(_imageWidgets);
-            stack.AddRange(_musicWidgets);
-            stack.AddRange(_dockWidgets);
-            stack.AddRange(_customClockWidgets);
-            stack.AddRange(_appWidgets);
-            stack.AddRange(_expandedFolderWidgets);
-            stack.AddRange(_calendarWidgets);
-            stack.Add(_edgeMenu);
+            windows.AddRange(_folderWidgets);
+            windows.AddRange(_imageWidgets);
+            windows.AddRange(_musicWidgets);
+            windows.AddRange(_dockWidgets);
+            windows.AddRange(_customClockWidgets);
+            windows.AddRange(_appWidgets);
+            windows.AddRange(_expandedFolderWidgets);
+            windows.AddRange(_calendarWidgets);
 
-            DesktopManager.StackWindows(stack);
+            windows.Sort(CompareWidgetLayer);
+
+            return windows;
+        }
+
+        private static int CompareWidgetLayer(Window left, Window right)
+        {
+            ILayeredDesktopWidget leftLayer = left as ILayeredDesktopWidget;
+            ILayeredDesktopWidget rightLayer = right as ILayeredDesktopWidget;
+
+            int leftIndex = leftLayer != null ? leftLayer.LayerIndex : 0;
+            int rightIndex = rightLayer != null ? rightLayer.LayerIndex : 0;
+            int compare = leftIndex.CompareTo(rightIndex);
+
+            if (compare != 0)
+            {
+                return compare;
+            }
+
+            return string.Compare(left.GetHashCode().ToString(), right.GetHashCode().ToString(), StringComparison.Ordinal);
         }
 
         public static LayoutProfile CaptureCurrentLayout(string profileName)

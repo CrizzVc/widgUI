@@ -13,7 +13,7 @@ using Microsoft.Win32;
 
 namespace WidgUI
 {
-    public class DockWidgetWindow : Window
+    public class DockWidgetWindow : Window, ILayeredDesktopWidget
     {
         private bool _isLocked = false;
         private bool _embeddedInDesktop = true;
@@ -23,6 +23,13 @@ namespace WidgUI
         private bool _adaptToBackground = false;
         private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
         private WidgetAppearanceColors _appearanceColors;
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
         
         private Border _cardBorder;
         private StackPanel _dockPanel;
@@ -57,6 +64,7 @@ namespace WidgUI
             {
                 AddDefaultItems();
                 NotifyLayoutChanged();
+                _layerIndex = WidgetRegistry.AllocateLayerIndex();
             }
 
             SetupContextMenu();
@@ -417,7 +425,7 @@ namespace WidgUI
             }
             menu.Items.Add(iconSizeMenu);
 
-            menu.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(menu, this);
 
             MenuItem closeItem = new MenuItem { Header = "Cerrar Dock" };
             closeItem.Click += (s, e) => this.Close();
@@ -525,7 +533,8 @@ namespace WidgUI
                 ThemeMode = (int)_themeMode,
                 AdaptToBackground = _adaptToBackground,
                 Opacity = _opacity,
-                Shortcuts = _items.Select(i => i.Path).ToList()
+                Shortcuts = _items.Select(i => i.Path).ToList(),
+                ZIndex = _layerIndex
             };
         }
 
@@ -553,6 +562,8 @@ namespace WidgUI
             {
                 _opacity = data.Opacity;
             }
+
+            _layerIndex = data.ZIndex;
 
             _items.Clear();
             if (data.Shortcuts != null)

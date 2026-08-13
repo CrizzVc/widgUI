@@ -50,6 +50,8 @@ namespace WidgUI
             _windowStartLeft = window.Left;
             _windowStartTop = window.Top;
 
+            WidgetRegistry.BeginTemporaryLayerBoost(window);
+
             EnsureOverlay();
             window.CaptureMouse();
             window.MouseMove += Window_MouseMove;
@@ -119,6 +121,8 @@ namespace WidgUI
                 _overlay.HideGuides();
             }
 
+            WidgetRegistry.EndTemporaryLayerBoost(window);
+            WidgetRegistry.EnsureEdgeMenuOnTop();
             WidgetRegistry.AutoSaveLayout();
         }
 

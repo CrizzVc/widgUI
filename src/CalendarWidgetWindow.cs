@@ -17,7 +17,7 @@ namespace WidgUI
         TimeGrid = 2
     }
 
-    public class CalendarWidgetWindow : Window
+    public class CalendarWidgetWindow : Window, ILayeredDesktopWidget
     {
         private const double StandardWidth = 400;
         private const double StandardHeight = 150;
@@ -48,6 +48,13 @@ namespace WidgUI
         private TextBlock _timeText;
         private Grid _calendarGrid;
         private DispatcherTimer _timer;
+        private int _layerIndex;
+
+        public int LayerIndex
+        {
+            get { return _layerIndex; }
+            set { _layerIndex = value; }
+        }
 
         public CalendarWidgetWindow() : this(null)
         {
@@ -72,6 +79,7 @@ namespace WidgUI
             else
             {
                 ApplyAppearance();
+                _layerIndex = WidgetRegistry.AllocateLayerIndex();
             }
         }
 
@@ -813,7 +821,7 @@ namespace WidgUI
             itemExit.Click += (s, e) => this.Close();
 
             cm.Items.Add(itemLock);
-            cm.Items.Add(new Separator());
+            WidgetLayerHelper.AppendLayerMenuItems(cm, this);
             cm.Items.Add(itemExit);
 
             _cardBorder.ContextMenu = cm;
@@ -835,7 +843,8 @@ namespace WidgUI
                 ThemeMode = (int)_themeMode,
                 AdaptToBackground = _adaptToBackground,
                 Opacity = _opacity,
-                StyleVariant = (int)_styleVariant
+                StyleVariant = (int)_styleVariant,
+                ZIndex = _layerIndex
             };
         }
 
@@ -865,6 +874,8 @@ namespace WidgUI
             {
                 _opacity = data.Opacity;
             }
+
+            _layerIndex = data.ZIndex;
 
             if (Enum.IsDefined(typeof(CalendarStyleVariant), data.StyleVariant))
             {
