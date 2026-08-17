@@ -47,6 +47,20 @@ namespace WidgUI
 
             DesktopManager.StackWindows(stack);
 
+            // Bring active expanded folder overlay and expanded folder window to the very top Z-order
+            foreach (ILayeredDesktopWidget w in EnumerateLayeredWidgets())
+            {
+                FolderWidgetWindow folder = w as FolderWidgetWindow;
+                if (folder != null && folder.IsExpanded)
+                {
+                    if (folder.OverlayWindow != null)
+                    {
+                        DesktopManager.BringWindowToTop(folder.OverlayWindow);
+                    }
+                    DesktopManager.BringWindowToTop(folder);
+                }
+            }
+
             if (_edgeMenu != null)
             {
                 DesktopManager.BringWindowToTop(_edgeMenu);
@@ -60,7 +74,11 @@ namespace WidgUI
                 return;
             }
 
-            if (_temporaryLayerBoostWindow == window || IsTopStackableWidget(window))
+            // Always boost expanded folder widgets or unboosted top widgets
+            FolderWidgetWindow folder = window as FolderWidgetWindow;
+            bool isExpandedFolder = folder != null && folder.IsExpanded;
+
+            if (!isExpandedFolder && (_temporaryLayerBoostWindow == window || IsTopStackableWidget(window)))
             {
                 return;
             }
@@ -96,6 +114,7 @@ namespace WidgUI
             List<Window> stack = new List<Window>();
             List<Window> sorted = GetStackableWindowsSorted();
 
+            // First add all non-promoted windows and non-active overlays
             foreach (Window window in sorted)
             {
                 if (promotedWindow != null && window == promotedWindow)
@@ -109,6 +128,26 @@ namespace WidgUI
             if (promotedWindow != null)
             {
                 AppendWindowWithOverlay(stack, promotedWindow);
+            }
+
+            // Ensure any active FolderWidgetWindow overlay is positioned right behind its folder, above all other widgets
+            foreach (Window window in sorted)
+            {
+                FolderWidgetWindow folder = window as FolderWidgetWindow;
+                if (folder != null && folder.OverlayWindow != null && folder.IsExpanded)
+                {
+                    stack.Remove(folder.OverlayWindow);
+                    int folderIndex = stack.IndexOf(folder);
+                    if (folderIndex >= 0)
+                    {
+                        stack.Insert(folderIndex, folder.OverlayWindow);
+                    }
+                    else
+                    {
+                        stack.Add(folder.OverlayWindow);
+                        stack.Add(folder);
+                    }
+                }
             }
 
             return stack;

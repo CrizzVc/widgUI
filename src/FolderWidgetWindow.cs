@@ -76,6 +76,11 @@ namespace WidgUI
             get { return _overlayWindow; }
         }
 
+        public bool IsExpanded
+        {
+            get { return _isExpanded; }
+        }
+
         public FolderWidgetWindow()
             : this(null)
         {
@@ -501,6 +506,7 @@ namespace WidgUI
             _overlayWindow.Show();
             DesktopManager.EmbedInDesktop(_overlayWindow);
             WidgetRegistry.ApplyLayerStack();
+            DesktopManager.BringWindowToTop(this);
             
             // Animate background color alpha from transparent to dark
             ColorAnimation colorAnim = new ColorAnimation
@@ -619,7 +625,9 @@ namespace WidgUI
                 UpdatePager();
                 PrepareIconsForStaggeredEntrance();
                 
-                // Show overlay behind folder
+                // Boost layer and show overlay behind folder
+                _isExpanded = true;
+                WidgetRegistry.BeginTemporaryLayerBoost(this);
                 ShowOverlay();
                 
                 DoubleAnimation animW = new DoubleAnimation
@@ -716,6 +724,7 @@ namespace WidgUI
                     UpdatePager();
                     
                     _isAnimating = false;
+                    WidgetRegistry.EndTemporaryLayerBoost(this);
                 };
                 
                 HideOverlay();
