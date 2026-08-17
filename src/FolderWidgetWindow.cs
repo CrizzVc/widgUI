@@ -61,6 +61,7 @@ namespace WidgUI
         private bool _adaptToBackground = false;
         private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
         private double _cornerRadius = 30;
+        private bool _removeWhiteBackground = false;
         private WidgetAppearanceColors _appearanceColors;
         private TextBlock _dropText;
         private int _layerIndex;
@@ -906,7 +907,7 @@ namespace WidgUI
                 for (int i = startIndex; i < endIndex; i++)
                 {
                     _iconsGrid.Children.Add(CreateAppShortcut(
-                        _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
+                        i, _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
                         itemSize, iconSize, itemMargin, cornerRadius, fontSize));
                 }
             }
@@ -917,7 +918,7 @@ namespace WidgUI
                     for (int i = 0; i < count; i++)
                     {
                         _iconsGrid.Children.Add(CreateAppShortcut(
-                            _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
+                            i, _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
                             itemSize, iconSize, itemMargin, cornerRadius, fontSize));
                     }
                 }
@@ -926,7 +927,7 @@ namespace WidgUI
                     for (int i = 0; i < 3; i++)
                     {
                         _iconsGrid.Children.Add(CreateAppShortcut(
-                            _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
+                            i, _shortcuts[i].IconSource, _shortcuts[i].Tooltip, _shortcuts[i].Path,
                             itemSize, iconSize, itemMargin, cornerRadius, fontSize));
                     }
 
@@ -1020,19 +1021,19 @@ namespace WidgUI
             return appBorder;
         }
 
-        private UIElement CreateAppShortcut(ImageSource imageSource, string tooltip, string path,
+        private UIElement CreateAppShortcut(int shortcutIndex, ImageSource imageSource, string tooltip, string path,
             double itemSize, double iconSize, double itemMargin, double cornerRadius, double fontSize)
         {
             Border appBorder = new Border
             {
                 Width = itemSize,
                 Height = itemSize,
-                Background = Brushes.White,
+                Background = _removeWhiteBackground ? Brushes.Transparent : Brushes.White,
                 CornerRadius = new CornerRadius(cornerRadius),
                 Margin = new Thickness(itemMargin),
                 Cursor = Cursors.Hand,
                 ToolTip = tooltip,
-                Effect = new DropShadowEffect
+                Effect = _removeWhiteBackground ? null : new DropShadowEffect
                 {
                     Color = Colors.Black,
                     Direction = 270,
@@ -1104,6 +1105,42 @@ namespace WidgUI
                 }
                 catch { }
             };
+
+            // Individual context menu for right clicking an item inside the folder
+            ContextMenu itemMenu = new ContextMenu();
+            MenuItem openItem = new MenuItem { Header = "Abrir" };
+            openItem.Click += (s, e) =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = path,
+                        UseShellExecute = true
+                    });
+                }
+                catch { }
+            };
+            itemMenu.Items.Add(openItem);
+
+            MenuItem deleteItem = new MenuItem { Header = "Eliminar de la carpeta" };
+            deleteItem.Click += (s, e) =>
+            {
+                if (shortcutIndex >= 0 && shortcutIndex < _shortcuts.Count)
+                {
+                    _shortcuts.RemoveAt(shortcutIndex);
+                    if (_isExpanded && _currentPage > 0 && _currentPage >= GetTotalPages())
+                    {
+                        _currentPage = Math.Max(0, GetTotalPages() - 1);
+                    }
+                    RenderShortcuts();
+                    UpdatePager();
+                    NotifyLayoutChanged();
+                }
+            };
+            itemMenu.Items.Add(deleteItem);
+
+            appBorder.ContextMenu = itemMenu;
 
             return appBorder;
         }
@@ -1178,10 +1215,25 @@ namespace WidgUI
                 opacityMenu.Items.Add(opacityItem);
             }
 
+            MenuItem removeWhiteBgItem = new MenuItem
+            {
+                Header = "Quitar fondo blanco en elementos",
+                IsCheckable = true,
+                IsChecked = _removeWhiteBackground
+            };
+            removeWhiteBgItem.Click += (s, e) =>
+            {
+                _removeWhiteBackground = removeWhiteBgItem.IsChecked;
+                RenderShortcuts();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
             appearanceMenu.Items.Add(lightItem);
             appearanceMenu.Items.Add(darkItem);
             appearanceMenu.Items.Add(adaptItem);
             appearanceMenu.Items.Add(opacityMenu);
+            appearanceMenu.Items.Add(removeWhiteBgItem);
             cm.Items.Add(appearanceMenu);
 
             MenuItem radiusMenu = new MenuItem { Header = "Radio de esquinas" };
@@ -1244,6 +1296,7 @@ namespace WidgUI
                 AdaptToBackground = _adaptToBackground,
                 Opacity = _opacity,
                 CornerRadius = _cornerRadius,
+                RemoveWhiteBackground = _removeWhiteBackground,
                 ZIndex = _layerIndex
             };
 
@@ -1290,6 +1343,7 @@ namespace WidgUI
                 _cornerRadius = data.CornerRadius;
             }
 
+            _removeWhiteBackground = data.RemoveWhiteBackground;
             _layerIndex = data.ZIndex;
 
             _shortcuts.Clear();

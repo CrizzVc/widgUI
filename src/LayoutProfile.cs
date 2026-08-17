@@ -143,6 +143,9 @@ namespace WidgUI
         [DataMember(Name = "zIndex")]
         public int ZIndex { get; set; }
 
+        [DataMember(Name = "removeWhiteBackground")]
+        public bool RemoveWhiteBackground { get; set; }
+
         public FolderWidgetLayoutData()
         {
             Shortcuts = new List<string>();
@@ -379,6 +382,9 @@ namespace WidgUI
 
         [DataMember(Name = "zIndex")]
         public int ZIndex { get; set; }
+
+        [DataMember(Name = "removeWhiteBackground")]
+        public bool RemoveWhiteBackground { get; set; }
 
         public ExpandedFolderWidgetLayoutData()
         {

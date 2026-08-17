@@ -31,6 +31,7 @@ namespace WidgUI
         private WidgetThemeMode _themeMode = WidgetThemeMode.Light;
         private bool _adaptToBackground;
         private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
+        private bool _removeWhiteBackground = false;
         private WidgetAppearanceColors _appearanceColors;
 
         private Border _cardBorder;
@@ -271,12 +272,12 @@ namespace WidgUI
             {
                 Width = ItemSize,
                 Height = ItemSize,
-                Background = Brushes.White,
+                Background = _removeWhiteBackground ? Brushes.Transparent : Brushes.White,
                 CornerRadius = new CornerRadius(IconCornerRadius),
                 Margin = new Thickness(ItemMargin),
                 Cursor = Cursors.Hand,
                 ToolTip = tooltip,
-                Effect = new DropShadowEffect
+                Effect = _removeWhiteBackground ? null : new DropShadowEffect
                 {
                     Color = Colors.Black,
                     Direction = 270,
@@ -359,12 +360,15 @@ namespace WidgUI
                 }
                 catch { }
             };
-            MenuItem removeItem = new MenuItem { Header = "Eliminar" };
+            MenuItem removeItem = new MenuItem { Header = "Eliminar de la carpeta" };
             removeItem.Click += (s, e) =>
             {
-                _shortcuts.RemoveAt(index);
-                RenderShortcuts();
-                NotifyLayoutChanged();
+                if (index >= 0 && index < _shortcuts.Count)
+                {
+                    _shortcuts.RemoveAt(index);
+                    RenderShortcuts();
+                    NotifyLayoutChanged();
+                }
             };
             itemMenu.Items.Add(openItem);
             itemMenu.Items.Add(removeItem);
@@ -471,10 +475,25 @@ namespace WidgUI
                 opacityMenu.Items.Add(opacityItem);
             }
 
+            MenuItem removeWhiteBgItem = new MenuItem
+            {
+                Header = "Quitar fondo blanco en elementos",
+                IsCheckable = true,
+                IsChecked = _removeWhiteBackground
+            };
+            removeWhiteBgItem.Click += (s, e) =>
+            {
+                _removeWhiteBackground = removeWhiteBgItem.IsChecked;
+                RenderShortcuts();
+                SetupContextMenu();
+                NotifyLayoutChanged();
+            };
+
             appearanceMenu.Items.Add(lightItem);
             appearanceMenu.Items.Add(darkItem);
             appearanceMenu.Items.Add(adaptItem);
             appearanceMenu.Items.Add(opacityMenu);
+            appearanceMenu.Items.Add(removeWhiteBgItem);
             cm.Items.Add(appearanceMenu);
             cm.Items.Add(new Separator());
 
@@ -511,6 +530,7 @@ namespace WidgUI
                 ThemeMode = (int)_themeMode,
                 AdaptToBackground = _adaptToBackground,
                 Opacity = _opacity,
+                RemoveWhiteBackground = _removeWhiteBackground,
                 ZIndex = _layerIndex
             };
 
@@ -552,6 +572,7 @@ namespace WidgUI
                 _opacity = data.Opacity;
             }
 
+            _removeWhiteBackground = data.RemoveWhiteBackground;
             _layerIndex = data.ZIndex;
 
             _shortcuts.Clear();
