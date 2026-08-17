@@ -61,7 +61,7 @@ namespace WidgUI
         private bool _adaptToBackground = false;
         private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
         private double _cornerRadius = 30;
-        private bool _removeWhiteBackground = false;
+        private bool _removeWhiteBackground = true;
         private WidgetAppearanceColors _appearanceColors;
         private TextBlock _dropText;
         private int _layerIndex;

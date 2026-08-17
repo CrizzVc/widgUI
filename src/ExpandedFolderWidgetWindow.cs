@@ -31,7 +31,7 @@ namespace WidgUI
         private WidgetThemeMode _themeMode = WidgetThemeMode.Light;
         private bool _adaptToBackground;
         private double _opacity = WidgetAppearanceHelper.DefaultOpacity;
-        private bool _removeWhiteBackground = false;
+        private bool _removeWhiteBackground = true;
         private WidgetAppearanceColors _appearanceColors;
 
         private Border _cardBorder;

@@ -151,6 +151,7 @@ namespace WidgUI
             Shortcuts = new List<string>();
             Opacity = WidgetAppearanceHelper.DefaultOpacity;
             CornerRadius = 30;
+            RemoveWhiteBackground = true;
         }
     }
 
@@ -390,6 +391,7 @@ namespace WidgUI
         {
             Shortcuts = new List<string>();
             Opacity = WidgetAppearanceHelper.DefaultOpacity;
+            RemoveWhiteBackground = true;
         }
     }
 
